@@ -94,8 +94,8 @@
   .cat-購物{ background:#ffe0ec; color:#d13d84; }
   .cat-航班{ background:#d6f3ff; color:#1a8fc9; }
   .cat-其他{ background:#e8ebee; color:#5a6b7a; }
-  .drag-handle{ cursor:grab; touch-action:none; }
-  .item-dragging{ opacity:0.35; }
+  .drag-handle{ cursor:grab; touch-action:none; user-select:none; }
+  .item-dragging{ box-shadow:0 12px 26px rgba(20,60,100,0.3); cursor:grabbing; }
   .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:center; padding:0 20px; }
   .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px; max-height:88vh; overflow-y:auto; }
   .field-label{ font-size:12px; font-weight:700; color:#5a6b7a; margin-bottom:4px; display:block; }
@@ -184,11 +184,10 @@
           </div>
 
           <!-- flight-style card -->
-          <div v-if="item.category==='航班'" class="card p-4 mb-3" draggable="true"
-               @dragstart="onDragStart(ii)" @dragover.prevent @drop="onDrop(ii)" :class="{'item-dragging': dragIndex===ii}">
+          <div v-if="item.category==='航班'" class="card p-4 mb-3" :data-item-index="ii" :class="{'item-dragging': dragIndex===ii}">
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-2">
-                <span class="drag-handle text-[#c3ccd4]">⠿</span>
+                <span class="drag-handle text-[#c3ccd4]" @pointerdown="onHandleDown($event, ii)">⠿</span>
                 <span class="cat-pill cat-航班">✈️ 航班資訊</span>
               </div>
               <div class="flex gap-2">
@@ -216,10 +215,9 @@
           </div>
 
           <!-- normal card -->
-          <div v-else class="card p-4 mb-3" draggable="true"
-               @dragstart="onDragStart(ii)" @dragover.prevent @drop="onDrop(ii)" :class="{'item-dragging': dragIndex===ii}">
+          <div v-else class="card p-4 mb-3" :data-item-index="ii" :class="{'item-dragging': dragIndex===ii}">
             <div class="flex items-start gap-2">
-              <span class="drag-handle text-[#c3ccd4] mt-0.5">⠿</span>
+              <span class="drag-handle text-[#c3ccd4] mt-0.5" @pointerdown="onHandleDown($event, ii)">⠿</span>
               <div class="flex-1" :class="{'cursor-pointer': item.address}" @click="openMap(item)">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="cat-pill" :class="'cat-'+item.category">{{ catIcon(item.category) }} {{ item.category }}</span>
@@ -308,7 +306,8 @@
       </div>
 
       <div class="card p-4">
-        <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">🏨 住宿資訊</h3>
+        <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🏨 住宿資訊</h3>
+        <div class="border-b border-[#eef2f6] mb-3"></div>
         <div v-for="h in lodgings" :key="h.id" class="mb-3 last:mb-0 bg-[#f4f8fc] rounded-xl p-3 cursor-pointer" @click="openMapAddress(h.address)">
           <p class="font-bold">{{ h.name }}</p>
           <p class="text-xs text-[#8a97a3] mt-1">{{ h.dates }}</p>
@@ -319,12 +318,14 @@
       </div>
 
       <div class="card p-4">
-        <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">🚗 租車資訊</h3>
+        <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🚗 租車資訊</h3>
+        <div class="border-b border-[#eef2f6] mb-3"></div>
         <p class="text-xs text-[#8a97a3]">本次行程以電車／巴士為主，未安排租車。若之後有租車需求，可在此新增資訊。</p>
       </div>
 
       <div class="card p-4">
-        <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">🚑 緊急醫療</h3>
+        <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🚑 緊急醫療</h3>
+        <div class="border-b border-[#eef2f6] mb-3"></div>
         <div class="grid grid-cols-2 gap-2">
           <div class="bg-[#fde8e8] rounded-xl p-3"><p class="text-xs font-bold text-[#c0392b]">警察</p><p class="text-xl font-black text-[#c0392b]">110</p></div>
           <div class="bg-[#fde8e8] rounded-xl p-3"><p class="text-xs font-bold text-[#c0392b]">救護車/消防</p><p class="text-xl font-black text-[#c0392b]">119</p></div>
@@ -811,6 +812,7 @@ createApp({
       flights: FLIGHTS,
 
       dragIndex:null,
+      dragState:null,
 
       weather:{ loading:false, error:false, temp:null, feels:null, icon:'🌡️' },
 
@@ -1009,13 +1011,63 @@ createApp({
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`, '_blank');
     },
 
-    onDragStart(index){ this.dragIndex = index; },
-    async onDrop(index){
-      if (this.dragIndex===null || this.dragIndex===index) return;
+    onHandleDown(e, index){
+      e.preventDefault();
+      const cardEl = e.target.closest('.card');
+      if (!cardEl) return;
+      this.dragIndex = index;
+      this.dragState = { startY: e.clientY, cardEl };
+      cardEl.style.position = 'relative';
+      cardEl.style.zIndex = 50;
+      this._onHandleMove = (ev) => this.onHandleMove(ev);
+      this._onHandleUp = (ev) => this.onHandleUp(ev);
+      window.addEventListener('pointermove', this._onHandleMove);
+      window.addEventListener('pointerup', this._onHandleUp);
+      window.addEventListener('pointercancel', this._onHandleUp);
+    },
+    async onHandleMove(e){
+      const ds = this.dragState;
+      if (!ds || this.dragIndex===null) return;
+      const dy = e.clientY - ds.startY;
+      ds.cardEl.style.transform = `translateY(${dy}px)`;
+
       const items = this.currentDay.items;
-      const moved = items.splice(this.dragIndex,1)[0];
-      items.splice(index,0,moved);
+      const siblings = [...ds.cardEl.parentElement.querySelectorAll(':scope > [data-item-index]')];
+      let targetIdx = this.dragIndex;
+      siblings.forEach(el => {
+        if (el === ds.cardEl) return;
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        const idx = Number(el.dataset.itemIndex);
+        if (e.clientY < mid && idx < this.dragIndex) targetIdx = Math.min(targetIdx, idx);
+        else if (e.clientY > mid && idx > this.dragIndex) targetIdx = Math.max(targetIdx, idx);
+      });
+
+      if (targetIdx !== this.dragIndex){
+        const screenTop = ds.cardEl.getBoundingClientRect().top;
+        const moved = items.splice(this.dragIndex, 1)[0];
+        items.splice(targetIdx, 0, moved);
+        this.dragIndex = targetIdx;
+        await this.$nextTick();
+        ds.cardEl.style.transform = 'none';
+        const naturalTop = ds.cardEl.getBoundingClientRect().top;
+        const newDy = screenTop - naturalTop;
+        ds.cardEl.style.transform = `translateY(${newDy}px)`;
+        ds.startY = e.clientY - newDy;
+      }
+    },
+    async onHandleUp(){
+      const ds = this.dragState;
+      window.removeEventListener('pointermove', this._onHandleMove);
+      window.removeEventListener('pointerup', this._onHandleUp);
+      window.removeEventListener('pointercancel', this._onHandleUp);
+      if (!ds){ this.dragIndex = null; return; }
+      ds.cardEl.style.transform = '';
+      ds.cardEl.style.zIndex = '';
+      ds.cardEl.style.position = '';
+      this.dragState = null;
       this.dragIndex = null;
+      const items = this.currentDay.items;
       if (this.cloudEnabled){
         try{
           const batch = writeBatch(db);
