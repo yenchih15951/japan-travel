@@ -29,49 +29,44 @@
   * { scrollbar-width:none; }
   .app-shell{ max-width:480px; margin:0 auto; min-height:100vh; background:transparent; position:relative; }
   .banner{
-    height:250px;
-    background: linear-gradient(135deg,#bfe0f7 0%, #8fc4ec 45%, #5a9fd6 100%);
+    height:300px;
+    background-color:#cfe7fb;
+    background-image: url('assets/banner.jpg'), linear-gradient(135deg,#bfe0f7 0%, #8fc4ec 45%, #5a9fd6 100%);
+    background-size: contain, cover;
+    background-position: center bottom, center;
+    background-repeat: no-repeat, no-repeat;
     position:relative;
     overflow:hidden;
     border-bottom-left-radius:32px;
     border-bottom-right-radius:32px;
   }
-  .banner::before{
-    content:'';
-    position:absolute; inset:0;
-    background-image:
-      radial-gradient(circle at 15% 30%, rgba(255,255,255,0.55) 0, rgba(255,255,255,0) 8%),
-      radial-gradient(circle at 35% 55%, rgba(255,255,255,0.4) 0, rgba(255,255,255,0) 6%),
-      radial-gradient(circle at 60% 20%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0) 7%),
-      radial-gradient(circle at 80% 60%, rgba(255,255,255,0.35) 0, rgba(255,255,255,0) 6%),
-      radial-gradient(circle at 90% 15%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0) 5%);
-  }
   .banner-fade{
     position:absolute; left:0; right:0; bottom:0; height:90px;
     background:linear-gradient(180deg, rgba(90,159,214,0) 0%, var(--ice-50) 100%);
   }
+  .banner-top-fade{
+    position:absolute; left:0; right:0; top:0; height:150px;
+    background:linear-gradient(180deg, rgba(12,28,45,0.5) 0%, rgba(12,28,45,0.22) 55%, rgba(12,28,45,0) 100%);
+  }
   .main-pull-up{ margin-top:-28px; position:relative; z-index:10; }
   .tabbar{
     position:absolute; right:14px; bottom:14px; z-index:20;
-    display:flex; gap:6px;
-    background:rgba(255,255,255,0.55);
-    backdrop-filter: blur(6px);
-    border-radius:20px;
-    padding:5px;
-    box-shadow:0 4px 14px rgba(30,70,110,0.15);
+    display:flex; gap:8px;
   }
   .tabbar button{
-    width:44px; height:44px; border-radius:16px;
+    width:46px; height:46px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
-    font-size:19px;
-    color:#4a6b85;
+    background:#ffffff;
+    color:var(--blue-600);
+    box-shadow:0 3px 10px rgba(20,60,100,0.18);
     transition:all .18s ease;
   }
+  .tabbar button svg{ width:25px; height:25px; }
   .tabbar button.active{
-    background:var(--blue-600);
-    color:#fff;
-    box-shadow:0 3px 10px rgba(47,104,179,0.4);
-    transform:translateY(-2px);
+    background: var(--blue-600);
+    color:#ffffff;
+    transform:scale(1.1);
+    box-shadow:0 4px 12px rgba(20,60,100,0.45);
   }
   .day-chip{
     min-width:52px; height:64px; border-radius:16px;
@@ -101,17 +96,22 @@
   .cat-其他{ background:#e8ebee; color:#5a6b7a; }
   .drag-handle{ cursor:grab; touch-action:none; }
   .item-dragging{ opacity:0.35; }
-  .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:flex-end; }
-  .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px 24px 0 0; max-height:88vh; overflow-y:auto; }
+  .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:center; padding:0 20px; }
+  .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px; max-height:88vh; overflow-y:auto; }
   .field-label{ font-size:12px; font-weight:700; color:#5a6b7a; margin-bottom:4px; display:block; }
-  .field-input{ width:100%; border:1px solid #dfe6ec; border-radius:12px; padding:10px 12px; font-size:14px; background:#f9fbfd; }
-  .field-input:focus{ outline:2px solid var(--blue-500); background:#fff; }
+  .field-input{ width:100%; border:none; border-radius:14px; padding:12px 16px; font-size:14px; background:#eef2f6; }
+  .field-input:focus{ outline:2px solid var(--blue-500); }
   .btn-primary{ background:var(--blue-600); color:#fff; font-weight:700; border-radius:14px; padding:12px; text-align:center; }
   .btn-ghost{ background:#f0f4f8; color:#5a6b7a; font-weight:700; border-radius:14px; padding:12px; text-align:center; }
   .btn-danger{ background:#fde8e8; color:#c0392b; font-weight:700; border-radius:14px; padding:12px; text-align:center; }
   .fade-enter-active,.fade-leave-active{ transition:opacity .18s ease; }
   .fade-enter-from,.fade-leave-to{ opacity:0; }
   .transit-row{ display:flex; align-items:center; gap:6px; padding:4px 0 4px 46px; color:#8a97a3; font-size:12px; }
+  .upload-drop{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    height:150px; border:2px dashed #d7dee5; border-radius:18px;
+    cursor:pointer; overflow:hidden; background:#fafcfe;
+  }
 </style>
 </head>
 <body>
@@ -120,6 +120,7 @@
   <!-- Banner -->
   <div class="banner">
     <div class="banner-fade"></div>
+    <div class="banner-top-fade"></div>
     <div class="absolute top-5 left-5 text-white">
       <p class="text-xs font-bold tracking-widest opacity-90">KANSAI TRIP</p>
       <h1 class="text-2xl font-black mt-1 drop-shadow">關西自由行</h1>
@@ -212,7 +213,7 @@
                @dragstart="onDragStart(ii)" @dragover.prevent @drop="onDrop(ii)" :class="{'item-dragging': dragIndex===ii}">
             <div class="flex items-start gap-2">
               <span class="drag-handle text-[#c3ccd4] mt-0.5">⠿</span>
-              <div class="flex-1 cursor-pointer" @click="openMap(item)">
+              <div class="flex-1" :class="{'cursor-pointer': item.address}" @click="openMap(item)">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="cat-pill" :class="'cat-'+item.category">{{ catIcon(item.category) }} {{ item.category }}</span>
                   <span v-if="item.time" class="text-[11px] text-[#8a97a3] font-medium">{{ item.time }}</span>
@@ -220,6 +221,7 @@
                 <p class="font-bold text-base mt-1.5">{{ item.name }}</p>
                 <p v-if="item.hours" class="text-xs text-[#8a97a3] mt-1">🕒 {{ item.hours }}</p>
                 <p v-if="item.ticket" class="text-xs text-[#8a97a3] mt-0.5">🎫 {{ item.ticket }}</p>
+                <p v-if="item.address" class="text-xs text-[var(--blue-600)] font-medium mt-0.5">📍 {{ item.address }}</p>
                 <p v-if="item.note" class="text-xs text-[#5a6b7a] mt-1.5 bg-[#f4f8fc] rounded-xl p-2 whitespace-pre-line">{{ item.note }}</p>
               </div>
               <button class="text-[#8a97a3] text-sm px-1" @click.stop="openEdit(item)">編輯</button>
@@ -379,7 +381,7 @@
   <transition name="fade">
   <div v-if="itemModal.show" class="modal-mask" @click.self="itemModal.show=false">
     <div class="modal-panel p-5">
-      <h3 class="font-black text-base mb-4">{{ itemModal.editing ? '編輯行程' : '新增行程' }}</h3>
+      <h3 class="font-black text-lg mb-4 text-center">{{ itemModal.editing ? '編輯行程' : '新增行程' }}</h3>
 
       <label class="field-label">分類</label>
       <select v-model="itemModal.data.category" class="field-input mb-3">
@@ -405,6 +407,8 @@
         <input v-if="['景點','住宿','美食','購物'].includes(itemModal.data.category)" v-model="itemModal.data.hours" class="field-input mb-3" placeholder="09:00-17:00">
         <label class="field-label" v-if="itemModal.data.category==='景點'">門票</label>
         <input v-if="itemModal.data.category==='景點'" v-model="itemModal.data.ticket" class="field-input mb-3" placeholder="成人 500円">
+        <label class="field-label">地址（填了才能點擊導航到 Google Maps）</label>
+        <input v-model="itemModal.data.address" class="field-input mb-3" placeholder="例如：大阪府大阪市...">
       </template>
 
       <label class="field-label">交通方式（前往此站）</label>
@@ -418,19 +422,19 @@
       <label class="field-label">特色＆備註</label>
       <textarea v-model="itemModal.data.note" class="field-input mb-4" rows="3" placeholder="特色、備註..."></textarea>
 
-      <div class="grid gap-2" :class="itemModal.editing ? 'grid-cols-2' : 'grid-cols-1'">
-        <button class="btn-primary" @click="saveItem">儲存</button>
-        <button v-if="itemModal.editing" class="btn-danger" @click="confirmDeleteItem">刪除</button>
+      <div class="grid grid-cols-2 gap-3">
+        <button class="btn-ghost" @click="itemModal.show=false">取消</button>
+        <button class="btn-primary" @click="saveItem">{{ itemModal.editing ? '儲存' : '新增' }}</button>
       </div>
-      <button class="btn-ghost w-full mt-2" @click="itemModal.show=false">取消</button>
+      <button v-if="itemModal.editing" class="btn-danger w-full mt-2" @click="confirmDeleteItem">刪除</button>
     </div>
   </div>
   </transition>
 
   <!-- ===== Delete confirm ===== -->
   <transition name="fade">
-  <div v-if="deleteConfirm.show" class="modal-mask" style="align-items:center;" @click.self="deleteConfirm.show=false">
-    <div class="modal-panel p-5" style="border-radius:24px;">
+  <div v-if="deleteConfirm.show" class="modal-mask" @click.self="deleteConfirm.show=false">
+    <div class="modal-panel p-5">
       <p class="font-bold text-center py-2">確定要刪除這個行程嗎？</p>
       <p class="text-xs text-[#8a97a3] text-center mb-4">刪除後將無法復原</p>
       <div class="grid grid-cols-2 gap-2">
@@ -444,15 +448,28 @@
   <!-- ===== Shopping Modal ===== -->
   <transition name="fade">
   <div v-if="showShoppingModal" class="modal-mask" @click.self="showShoppingModal=false">
-    <div class="modal-panel p-5">
-      <h3 class="font-black text-base mb-4">新增購物項目</h3>
-      <label class="field-label">商品名稱</label>
-      <input v-model="shoppingForm.name" class="field-input mb-3" placeholder="例如：白色戀人">
-      <label class="field-label">圖片</label>
-      <input type="file" accept="image/*" capture="environment" @change="onShoppingPhoto" class="field-input mb-3">
-      <img v-if="shoppingForm.photo" :src="shoppingForm.photo" class="w-full rounded-xl mb-3 max-h-48 object-cover">
-      <button class="btn-primary" @click="saveShopping">新增</button>
-      <button class="btn-ghost w-full mt-2" @click="showShoppingModal=false">取消</button>
+    <div class="modal-panel p-6">
+      <h3 class="font-black text-lg mb-5 text-center">新增購物清單</h3>
+
+      <input v-model="shoppingForm.name" class="field-input mb-3" placeholder="商品名稱">
+
+      <label class="upload-drop mb-5">
+        <input type="file" accept="image/*" capture="environment" @change="onShoppingPhoto" class="hidden">
+        <img v-if="shoppingForm.photo" :src="shoppingForm.photo" class="w-full h-full object-cover">
+        <template v-else>
+          <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#9aa7b2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="7" width="18" height="13" rx="2.5"/>
+            <path d="M8 7l1.1-2.1A1.5 1.5 0 0 1 10.4 4h3.2a1.5 1.5 0 0 1 1.3.9L16 7"/>
+            <circle cx="12" cy="13.3" r="3.4"/>
+          </svg>
+          <p class="text-xs text-[#9aa7b2] mt-2">上傳照片</p>
+        </template>
+      </label>
+
+      <div class="grid grid-cols-2 gap-3">
+        <button class="btn-ghost" @click="showShoppingModal=false">取消</button>
+        <button class="btn-primary" @click="saveShopping">新增</button>
+      </div>
     </div>
   </div>
   </transition>
@@ -461,7 +478,7 @@
   <transition name="fade">
   <div v-if="showMembersModal" class="modal-mask" @click.self="showMembersModal=false">
     <div class="modal-panel p-5">
-      <h3 class="font-black text-base mb-4">管理成員</h3>
+      <h3 class="font-black text-lg mb-4 text-center">管理成員</h3>
       <div class="flex flex-wrap gap-2 mb-4">
         <span v-for="m in members" :key="m" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f8fc] text-sm font-bold">
           {{ m }}
@@ -481,7 +498,7 @@
   <transition name="fade">
   <div v-if="showExpenseModal" class="modal-mask" @click.self="showExpenseModal=false">
     <div class="modal-panel p-5">
-      <h3 class="font-black text-base mb-4">{{ expenseEditingId ? '編輯花費' : '新增花費' }}</h3>
+      <h3 class="font-black text-lg mb-4 text-center">{{ expenseEditingId ? '編輯花費' : '新增花費' }}</h3>
       <label class="field-label">類別</label>
       <select v-model="expenseForm.category" class="field-input mb-3">
         <option v-for="c in expenseCategories" :key="c" :value="c">{{ c }}</option>
@@ -518,11 +535,11 @@
 
       <label class="field-label">備註</label>
       <textarea v-model="expenseForm.note" class="field-input mb-4" rows="2"></textarea>
-      <div class="grid gap-2" :class="expenseEditingId ? 'grid-cols-2' : 'grid-cols-1'">
+      <div class="grid grid-cols-2 gap-3">
+        <button class="btn-ghost" @click="showExpenseModal=false">取消</button>
         <button class="btn-primary" @click="saveExpense">{{ expenseEditingId ? '儲存' : '新增' }}</button>
-        <button v-if="expenseEditingId" class="btn-danger" @click="removeExpense(expenseEditingId); showExpenseModal=false">刪除</button>
       </div>
-      <button class="btn-ghost w-full mt-2" @click="showExpenseModal=false">取消</button>
+      <button v-if="expenseEditingId" class="btn-danger w-full mt-2" @click="removeExpense(expenseEditingId); showExpenseModal=false">刪除</button>
     </div>
   </div>
   </transition>
@@ -559,17 +576,36 @@ const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
 const EXPENSE_CATEGORIES = ['交通','飲食','住宿','門票','購物','其他'];
 const DEFAULT_MEMBERS = ['樹懶','大馬','可可','小馬','彥志','林庭','Leo','Pao'];
 
+const ICONS = {
+  itinerary: `<svg viewBox="0 0 24 24">
+    <path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M12 2.3c-4.1 0-7.3 3.15-7.3 7.05C4.7 14.6 12 21.7 12 21.7s7.3-7.1 7.3-12.35c0-3.9-3.2-7.05-7.3-7.05Zm0 9.9a2.85 2.85 0 1 0 0-5.7 2.85 2.85 0 0 0 0 5.7Z"/>
+  </svg>`,
+  info: `<svg viewBox="0 0 24 24">
+    <circle cx="12" cy="7.6" r="1.6" fill="currentColor"/>
+    <rect x="10.3" y="10.6" width="3.4" height="8" rx="1.7" fill="currentColor"/>
+  </svg>`,
+  shopping: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 9.2V7.8a3 3 0 0 1 6 0v1.4"/>
+    <path fill="currentColor" fill-opacity="0.18" d="M5.3 9.2h13.4l-1.15 9.7a2.2 2.2 0 0 1-2.18 1.95H8.63a2.2 2.2 0 0 1-2.18-1.95L5.3 9.2Z"/>
+  </svg>`,
+  expense: `<svg viewBox="0 0 24 24">
+    <ellipse cx="12" cy="16.6" rx="7.2" ry="2.7" fill="currentColor" fill-opacity="0.45"/>
+    <ellipse cx="12" cy="12.8" rx="7.2" ry="2.7" fill="currentColor" fill-opacity="0.7"/>
+    <ellipse cx="12" cy="9" rx="7.2" ry="2.7" fill="currentColor"/>
+  </svg>`,
+};
+
 const uid = () => Math.random().toString(36).slice(2,10);
 
 // ---- Seed itinerary data (from trip spreadsheet) ----
 function seedDays(){
-  const mk = (category, name, extra={}) => ({ id: uid(), category, name, time:'', hours:'', ticket:'', note:'', transitMode:'car', transitDuration:'', ...extra });
+  const mk = (category, name, extra={}) => ({ id: uid(), category, name, time:'', hours:'', ticket:'', address:'', note:'', transitMode:'car', transitDuration:'', ...extra });
 
   return [
     { date:'2026-11-06', city:'大阪', summary:'台北 → 大阪（神戶機場）', lat:34.6937, lon:135.5023, items:[
       mk('航班','', { airportFrom:'TPE', airportTo:'UKB', depTime:'14:30', arrTime:'18:00', duration:'約3小時', flightNo:'', note:'12:30 桃園機場報到，18:30 入境手續/拿行李，19:30 前往市區，19:30 Check-in', transitMode:'car', transitDuration:'' }),
       mk('美食','う頂天（鰻魚飯）', { time:'晚餐', transitMode:'walk', transitDuration:'步行約10分鐘' }),
-      mk('住宿','大阪 Airbnb（福島）', { time:'Check-in', hours:'', note:'大阪府大阪市福島區福島5丁目9-11', transitMode:'walk', transitDuration:'步行約5分鐘' }),
+      mk('住宿','大阪 Airbnb（福島）', { time:'Check-in', hours:'', address:'大阪府大阪市福島區福島5丁目9-11', transitMode:'walk', transitDuration:'步行約5分鐘' }),
     ]},
     { date:'2026-11-07', city:'大阪', summary:'大阪市區・梅田百貨', lat:34.6937, lon:135.5023, items:[
       mk('購物','梅田百貨', { time:'10:00 出門', transitMode:'car', transitDuration:'' }),
@@ -600,7 +636,7 @@ function seedDays(){
       mk('美食','嵐山周邊（待找）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
       mk('景點','保津川遊船・竹林小徑&野宮神社・渡月橋', { time:'12:00-16:30', transitMode:'walk', transitDuration:'' }),
       mk('美食','京都市區（待找）', { time:'晚餐', transitMode:'car', transitDuration:'' }),
-      mk('住宿','京都 Airbnb（東九條）', { time:'Check-in', note:'京都府京都市南區東九條室町32-2', transitMode:'car', transitDuration:'' }),
+      mk('住宿','京都 Airbnb（東九條）', { time:'Check-in', address:'京都府京都市南區東九條室町32-2', transitMode:'car', transitDuration:'' }),
     ]},
     { date:'2026-11-12', city:'京都', summary:'東山線・清水寺・祇園', lat:35.0116, lon:135.7681, items:[
       mk('景點','清水寺・二年坂／三年坂', { time:'10:00 退房出門', transitMode:'transit', transitDuration:'京都→五条 電車約30分鐘' }),
@@ -703,10 +739,10 @@ createApp({
   data(){
     return {
       tabs:[
-        { key:'itinerary', icon:'🗓️' },
-        { key:'info', icon:'ℹ️' },
-        { key:'shopping', icon:'🛍️' },
-        { key:'expense', icon:'💰' },
+        { key:'itinerary', icon:ICONS.itinerary },
+        { key:'expense', icon:ICONS.expense },
+        { key:'shopping', icon:ICONS.shopping },
+        { key:'info', icon:ICONS.info },
       ],
       activeTab:'itinerary',
       activeDayIndex:0,
@@ -899,8 +935,8 @@ createApp({
     },
 
     openMap(item){
-      const query = encodeURIComponent(item.name + ' ' + this.currentDay.city);
-      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+      if (!item.address) return;
+      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`, '_blank');
     },
     openMapAddress(address){
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`, '_blank');
@@ -925,7 +961,7 @@ createApp({
     openAddItem(){
       this.itemModal = {
         show:true, editing:false, dayIndex:this.activeDayIndex, itemId:null,
-        data:{ category:'景點', name:'', time:'', hours:'', ticket:'', note:'', transitMode:'car', transitDuration:'', airportFrom:'', airportTo:'', depTime:'', arrTime:'', duration:'', flightNo:'' }
+        data:{ category:'景點', name:'', time:'', hours:'', ticket:'', address:'', note:'', transitMode:'car', transitDuration:'', airportFrom:'', airportTo:'', depTime:'', arrTime:'', duration:'', flightNo:'' }
       };
     },
     openEdit(item){
