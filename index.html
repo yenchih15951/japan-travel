@@ -17,6 +17,7 @@
     --blue-700:#25508c;
     --ink:#2c3a49;
   }
+  [v-cloak]{ display:none !important; }
   *{ -webkit-tap-highlight-color: transparent; }
   html,body{ height:100%; }
   body{
@@ -122,7 +123,7 @@
 </style>
 </head>
 <body>
-<div id="app" class="app-shell">
+<div id="app" class="app-shell" v-cloak>
 
   <!-- Banner -->
   <div class="banner">
@@ -494,7 +495,7 @@
       <input v-model="shoppingForm.name" class="field-input mb-3" placeholder="商品名稱">
 
       <label class="upload-drop mb-5">
-        <input type="file" accept="image/*" capture="environment" @change="onShoppingPhoto" class="hidden">
+        <input type="file" accept="image/*" @change="onShoppingPhoto" class="hidden">
         <img v-if="shoppingForm.photo" :src="shoppingForm.photo" class="w-full h-full object-cover">
         <template v-else>
           <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#9aa7b2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -547,7 +548,9 @@
       <label class="field-label">名稱</label>
       <input v-model="expenseForm.name" class="field-input mb-3" placeholder="例如：拉麵午餐">
       <label class="field-label">日期</label>
-      <input type="date" v-model="expenseForm.date" class="field-input mb-3">
+      <div class="field-input mb-3" style="padding:0; overflow:hidden;">
+        <input type="date" v-model="expenseForm.date" style="width:100%; display:block; box-sizing:border-box; padding:12px 16px; background:transparent; border:none; outline:none; font-size:14px; color:inherit;">
+      </div>
       <label class="field-label">金額（日幣）</label>
       <input type="number" inputmode="decimal" v-model.number="expenseForm.amount" class="field-input mb-3" placeholder="0">
       <label class="field-label">付款方式</label>
@@ -895,6 +898,18 @@ createApp({
     members:{ deep:true, handler(){ this.persist(); } },
   },
   async mounted(){
+    // some mobile browsers restore a stale cached frame (with a modal still open) for an instant
+    // before this script re-runs; force every modal closed whenever the page is shown/restored.
+    const closeAllModals = () => {
+      this.showExpenseModal = false;
+      this.showShoppingModal = false;
+      this.showMembersModal = false;
+      this.itemModal.show = false;
+      this.deleteConfirm.show = false;
+    };
+    closeAllModals();
+    window.addEventListener('pageshow', closeAllModals);
+
     this.restore();
     this.loadWeather();
     this.fetchFxRate();
