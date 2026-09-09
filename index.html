@@ -112,6 +112,13 @@
     height:150px; border:2px dashed #d7dee5; border-radius:18px;
     cursor:pointer; overflow:hidden; background:#fafcfe;
   }
+  .fx-card{ background:linear-gradient(135deg, #004c8d 0%, #1f7a94 100%); border-radius:20px; }
+  .fx-box{ border-radius:14px; padding:11px 13px; background:rgba(255,255,255,0.16); }
+  .fx-input{ background:transparent; border:none; color:#fff; font-weight:900; font-size:17px; width:100%; outline:none; min-width:0; }
+  .fx-input::placeholder{ color:rgba(255,255,255,0.45); }
+  .fx-swap-icon{
+    display:flex; align-items:center; justify-content:center; color:#78e9ff; font-size:16px; flex-shrink:0; width:28px;
+  }
 </style>
 </head>
 <body>
@@ -244,26 +251,58 @@
         </p>
       </div>
 
-      <div class="card p-4">
-        <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">💱 匯率換算</h3>
+      <div class="fx-card p-5">
+        <h3 class="font-black text-sm mb-4 text-white flex items-center gap-1.5">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="2.2"/>
+            <path d="M7.5 7h9"/>
+            <circle cx="8" cy="12" r="0.9" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/>
+            <circle cx="16" cy="12" r="0.9" fill="currentColor" stroke="none"/>
+            <circle cx="8" cy="16" r="0.9" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none"/>
+            <circle cx="16" cy="16" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+          匯率換算
+        </h3>
         <div class="flex items-center gap-2">
-          <input v-model.number="fx.amount" type="number" inputmode="decimal" placeholder="輸入日幣金額" class="field-input flex-1" @input="convertFx">
-          <span class="text-xs text-[#8a97a3] font-bold">JPY</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-[11px] text-white/60 font-bold mb-1.5">{{ fx.swapped ? 'TWD（台幣）' : 'JPY（日幣）' }}</p>
+            <div class="fx-box">
+              <input v-model.number="fx.amount" type="number" inputmode="decimal" placeholder="0" class="fx-input" @input="convertFx">
+            </div>
+          </div>
+          <button class="fx-swap-icon mt-6" @click="swapFx">⇄</button>
+          <div class="flex-1 min-w-0">
+            <p class="text-[11px] text-white/60 font-bold mb-1.5">{{ fx.swapped ? 'JPY（日幣）' : 'TWD（台幣）' }}</p>
+            <div class="fx-box">
+              <p class="font-black text-[17px] text-white truncate">{{ fx.swapped ? '¥' : '$' }} {{ fx.result !== null ? Math.round(fx.result).toLocaleString() : '--' }}</p>
+            </div>
+          </div>
         </div>
-        <div class="mt-2 text-lg font-black text-[var(--blue-600)]">
-          ≈ {{ fx.result !== null ? fx.result.toLocaleString(undefined,{maximumFractionDigits:1}) : '--' }} <span class="text-xs font-bold text-[#8a97a3]">TWD</span>
-        </div>
-        <p class="text-[11px] text-[#8a97a3] mt-1">{{ fx.rateText }}</p>
+        <p class="text-[11px] mt-3 text-right" style="color:#a6d9ea;">匯率基準：{{ fx.rate ? fx.rate.toFixed(4) : '--' }}</p>
       </div>
 
       <div class="card p-4">
-        <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">✈️ 航班資訊</h3>
-        <div v-for="f in flights" :key="f.id" class="mb-3 last:mb-0 bg-[#f4f8fc] rounded-xl p-3">
-          <p class="text-xs font-bold text-[var(--blue-600)] mb-1">{{ f.label }}</p>
-          <div class="flex items-center justify-between">
-            <div class="text-center"><p class="font-black">{{ f.airportFrom }}</p><p class="text-[11px] text-[#8a97a3]">{{ f.depTime }}</p></div>
-            <div class="flex-1 text-center text-[10px] text-[#8a97a3]">{{ f.duration }}<br>{{ f.flightNo }}</div>
-            <div class="text-center"><p class="font-black">{{ f.airportTo }}</p><p class="text-[11px] text-[#8a97a3]">{{ f.arrTime }}</p></div>
+        <h3 class="font-black text-sm mb-1 text-[var(--blue-700)] flex items-center gap-1.5">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M21 15.5v-2l-8-5V4a1.5 1.5 0 0 0-3 0v4.5l-8 5v2l8-2.5V19l-2.5 2v1.5l4-1 4 1V21l-2.5-2v-5.5l8 2.5Z"/></svg>
+          航班資訊
+        </h3>
+        <div class="border-b border-[#eef2f6] mb-3"></div>
+        <div v-for="f in flights" :key="f.id" class="mb-2.5 last:mb-0 rounded-2xl p-3.5" :class="f.theme==='blue' ? 'bg-[#e8f1fc]' : 'bg-[#fdf0e6]'">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <p class="font-black text-sm" :class="f.theme==='blue' ? 'text-[var(--blue-600)]' : 'text-[#c9711a]'">{{ f.codeFrom }} {{ f.cityFrom }}</p>
+              <p class="text-xs text-[#8a97a3] mt-0.5">{{ f.depTime }}</p>
+            </div>
+            <div class="flex flex-col items-center shrink-0">
+              <svg viewBox="0 0 24 24" width="18" height="18" :fill="f.theme==='blue' ? 'var(--blue-600)' : '#c9711a'"><path d="M21 15.5v-2l-8-5V4a1.5 1.5 0 0 0-3 0v4.5l-8 5v2l8-2.5V19l-2.5 2v1.5l4-1 4 1V21l-2.5-2v-5.5l8 2.5Z"/></svg>
+              <p class="text-[10px] text-[#8a97a3] mt-1 whitespace-nowrap">{{ f.flightNo }} ({{ f.date }})</p>
+            </div>
+            <div class="text-right">
+              <p class="font-black text-sm" :class="f.theme==='blue' ? 'text-[var(--blue-600)]' : 'text-[#c9711a]'">{{ f.codeTo }} {{ f.cityTo }}</p>
+              <p class="text-xs text-[#8a97a3] mt-0.5">{{ f.arrTime }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -299,14 +338,14 @@
     <div v-if="activeTab==='shopping'" class="px-4 pt-5">
       <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">🛍️ 購物清單</h3>
       <div class="grid grid-cols-2 gap-3">
-        <div v-for="s in shopping" :key="s.id" class="card overflow-hidden">
+        <div v-for="s in shopping" :key="s.id" class="card overflow-hidden cursor-pointer" @click="openEditShopping(s)">
           <div class="aspect-square bg-[#eef3f8] flex items-center justify-center overflow-hidden">
             <img v-if="s.photo" :src="s.photo" class="w-full h-full object-cover">
             <span v-else class="text-3xl">🛍️</span>
           </div>
           <div class="p-2.5 flex items-center justify-between gap-1">
             <p class="text-xs font-bold truncate">{{ s.name }}</p>
-            <button class="text-[#c3ccd4] text-xs shrink-0" @click="removeShopping(s.id)">✕</button>
+            <button class="text-[#c3ccd4] text-xs shrink-0" @click.stop="removeShopping(s.id)">✕</button>
           </div>
         </div>
       </div>
@@ -374,7 +413,7 @@
 
   <!-- FAB -->
   <button v-if="activeTab==='itinerary'" class="fab" @click="openAddItem">＋</button>
-  <button v-if="activeTab==='shopping'" class="fab" @click="showShoppingModal=true">＋</button>
+  <button v-if="activeTab==='shopping'" class="fab" @click="openAddShopping">＋</button>
   <button v-if="activeTab==='expense'" class="fab" @click="openAddExpense">＋</button>
 
   <!-- ===== Itinerary Add/Edit Modal ===== -->
@@ -449,7 +488,7 @@
   <transition name="fade">
   <div v-if="showShoppingModal" class="modal-mask" @click.self="showShoppingModal=false">
     <div class="modal-panel p-6">
-      <h3 class="font-black text-lg mb-5 text-center">新增購物清單</h3>
+      <h3 class="font-black text-lg mb-5 text-center">{{ shoppingEditingId ? '編輯購物清單' : '新增購物清單' }}</h3>
 
       <input v-model="shoppingForm.name" class="field-input mb-3" placeholder="商品名稱">
 
@@ -468,8 +507,9 @@
 
       <div class="grid grid-cols-2 gap-3">
         <button class="btn-ghost" @click="showShoppingModal=false">取消</button>
-        <button class="btn-primary" @click="saveShopping">新增</button>
+        <button class="btn-primary" @click="saveShopping">{{ shoppingEditingId ? '儲存' : '新增' }}</button>
       </div>
+      <button v-if="shoppingEditingId" class="btn-danger w-full mt-2" @click="removeShopping(shoppingEditingId); showShoppingModal=false">刪除</button>
     </div>
   </div>
   </transition>
@@ -578,20 +618,37 @@ const DEFAULT_MEMBERS = ['樹懶','大馬','可可','小馬','彥志','林庭','
 
 const ICONS = {
   itinerary: `<svg viewBox="0 0 24 24">
-    <path fill-rule="evenodd" clip-rule="evenodd" fill="currentColor" d="M12 2.3c-4.1 0-7.3 3.15-7.3 7.05C4.7 14.6 12 21.7 12 21.7s7.3-7.1 7.3-12.35c0-3.9-3.2-7.05-7.3-7.05Zm0 9.9a2.85 2.85 0 1 0 0-5.7 2.85 2.85 0 0 0 0 5.7Z"/>
+    <mask id="mapMask">
+      <rect width="24" height="24" fill="#ffffff"/>
+      <circle cx="12" cy="7.2" r="4.7" fill="#000000"/>
+      <polygon points="8.6,10.3 15.4,10.3 12,16.3" fill="#000000"/>
+    </mask>
+    <g mask="url(#mapMask)">
+      <polygon fill="currentColor" points="3,8.5 8.5,7 8.5,19.5 3,21"/>
+      <polygon fill="currentColor" points="9.3,7 14.7,8.3 14.7,20.8 9.3,19.5"/>
+      <polygon fill="currentColor" points="15.5,8.3 21,6.8 21,19.3 15.5,20.8"/>
+    </g>
+    <mask id="pinMask">
+      <rect width="24" height="24" fill="#ffffff"/>
+      <circle cx="12" cy="5.6" r="1.5" fill="#000000"/>
+    </mask>
+    <g mask="url(#pinMask)">
+      <circle cx="12" cy="7.2" r="4.1" fill="currentColor"/>
+      <polygon points="9,10.5 15,10.5 12,15.5" fill="currentColor"/>
+    </g>
   </svg>`,
   info: `<svg viewBox="0 0 24 24">
-    <circle cx="12" cy="7.6" r="1.6" fill="currentColor"/>
-    <rect x="10.3" y="10.6" width="3.4" height="8" rx="1.7" fill="currentColor"/>
+    <circle cx="12" cy="12" r="7.5" fill="#ffffff"/>
+    <circle cx="12" cy="8.6" r="1.3" fill="#0e3a5f"/>
+    <rect x="10.8" y="11" width="2.4" height="6.4" rx="1.2" fill="#0e3a5f"/>
   </svg>`,
   shopping: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M9 9.2V7.8a3 3 0 0 1 6 0v1.4"/>
     <path fill="currentColor" fill-opacity="0.18" d="M5.3 9.2h13.4l-1.15 9.7a2.2 2.2 0 0 1-2.18 1.95H8.63a2.2 2.2 0 0 1-2.18-1.95L5.3 9.2Z"/>
   </svg>`,
-  expense: `<svg viewBox="0 0 24 24">
-    <ellipse cx="12" cy="16.6" rx="7.2" ry="2.7" fill="currentColor" fill-opacity="0.45"/>
-    <ellipse cx="12" cy="12.8" rx="7.2" ry="2.7" fill="currentColor" fill-opacity="0.7"/>
-    <ellipse cx="12" cy="9" rx="7.2" ry="2.7" fill="currentColor"/>
+  expense: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.5v17"/>
+    <path d="M16.3 7.6c0-1.7-1.9-2.6-4.3-2.6s-4.3 1-4.3 2.7c0 3.6 8.6 1.7 8.6 5.4 0 1.9-1.9 2.8-4.3 2.8s-4.3-.9-4.3-2.6"/>
   </svg>`,
 };
 
@@ -662,8 +719,8 @@ const LODGINGS = [
   { id:'kyoto', name:'京都 Airbnb（東九條）', address:'京都府京都市南區東九條室町32-2', dates:'11/11 - 11/13（2晚）', phone:'' },
 ];
 const FLIGHTS = [
-  { id:'go', label:'去程', airportFrom:'TPE', airportTo:'UKB', depTime:'14:30', arrTime:'18:00', duration:'約3小時', flightNo:'待補' },
-  { id:'back', label:'回程', airportFrom:'UKB', airportTo:'TPE', depTime:'19:00', arrTime:'21:15', duration:'約3小時', flightNo:'待補' },
+  { id:'go', label:'去程', theme:'blue', codeFrom:'TPE', cityFrom:'台北', codeTo:'UKB', cityTo:'神戶', depTime:'14:30', arrTime:'18:00', date:'11/6', flightNo:'待補' },
+  { id:'back', label:'回程', theme:'orange', codeFrom:'UKB', cityFrom:'神戶', codeTo:'TPE', cityTo:'台北', depTime:'19:00', arrTime:'21:15', date:'11/14', flightNo:'待補' },
 ];
 
 const WCODE_ICON = (code) => {
@@ -757,13 +814,14 @@ createApp({
 
       weather:{ loading:false, error:false, temp:null, feels:null, icon:'🌡️' },
 
-      fx:{ amount:null, result:null, rateText:'輸入金額以查詢即時匯率', rate:null },
+      fx:{ amount:null, result:null, rateText:'輸入金額以查詢即時匯率', rate:null, swapped:false },
 
       itemModal:{ show:false, editing:false, dayIndex:0, itemId:null, data:{} },
       deleteConfirm:{ show:false },
 
       shopping:[],
       showShoppingModal:false,
+      shoppingEditingId:null,
       shoppingForm:{ name:'', photo:'' },
 
       expenses:[],
@@ -837,6 +895,7 @@ createApp({
   async mounted(){
     this.restore();
     this.loadWeather();
+    this.fetchFxRate();
 
     if (!FIREBASE_READY) return;
     try{
@@ -919,19 +978,27 @@ createApp({
       }
     },
 
-    async convertFx(){
-      if (!this.fx.amount){ this.fx.result = null; return; }
+    async fetchFxRate(){
       try{
-        if (!this.fx.rate){
-          const res = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/jpy.json');
-          const json = await res.json();
-          this.fx.rate = json.jpy.twd;
-          this.fx.rateText = `匯率：1 JPY ≈ ${this.fx.rate.toFixed(4)} TWD（${json.date}）`;
-        }
-        this.fx.result = this.fx.amount * this.fx.rate;
+        const res = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/jpy.json');
+        const json = await res.json();
+        this.fx.rate = json.jpy.twd;
+        this.fx.rateText = `匯率：1 JPY ≈ ${this.fx.rate.toFixed(4)} TWD（${json.date}）`;
       } catch(e){
         this.fx.rateText = '匯率查詢失敗，請稍後再試';
       }
+    },
+    async convertFx(){
+      if (!this.fx.amount){ this.fx.result = null; return; }
+      if (!this.fx.rate) await this.fetchFxRate();
+      if (!this.fx.rate) return;
+      this.fx.result = this.fx.swapped ? this.fx.amount / this.fx.rate : this.fx.amount * this.fx.rate;
+    },
+    swapFx(){
+      const carried = this.fx.result !== null ? Math.round(this.fx.result * 100) / 100 : null;
+      this.fx.swapped = !this.fx.swapped;
+      this.fx.amount = carried;
+      this.convertFx();
     },
 
     openMap(item){
@@ -1007,9 +1074,26 @@ createApp({
       reader.onload = async () => { this.shoppingForm.photo = await compressImage(reader.result); };
       reader.readAsDataURL(file);
     },
+    openAddShopping(){
+      this.shoppingEditingId = null;
+      this.shoppingForm = { name:'', photo:'' };
+      this.showShoppingModal = true;
+    },
+    openEditShopping(s){
+      this.shoppingEditingId = s.id;
+      this.shoppingForm = { name:s.name, photo:s.photo||'' };
+      this.showShoppingModal = true;
+    },
     async saveShopping(){
       if (!this.shoppingForm.name) return;
-      if (this.cloudEnabled){
+      if (this.shoppingEditingId){
+        if (this.cloudEnabled){
+          try{ await updateDoc(doc(shoppingCol(), this.shoppingEditingId), cleanData(this.shoppingForm)); }catch(e){ console.error(e); }
+        } else {
+          const idx = this.shopping.findIndex(s=>s.id===this.shoppingEditingId);
+          if (idx>-1) this.shopping[idx] = { ...this.shopping[idx], ...this.shoppingForm };
+        }
+      } else if (this.cloudEnabled){
         try{ await addDoc(shoppingCol(), cleanData({ ...this.shoppingForm, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
       } else {
         this.shopping.push({ id:uid(), ...this.shoppingForm });
