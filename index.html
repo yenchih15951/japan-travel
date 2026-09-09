@@ -122,7 +122,7 @@
     <div class="banner-fade"></div>
     <div class="absolute top-5 left-5 text-white">
       <p class="text-xs font-bold tracking-widest opacity-90">KANSAI TRIP</p>
-      <h1 class="text-2xl font-black mt-1 drop-shadow">關西親子自由行</h1>
+      <h1 class="text-2xl font-black mt-1 drop-shadow">關西自由行</h1>
       <p class="text-xs font-medium mt-1 opacity-90">2026.11.06 - 11.14 ・ 大阪・京都・奈良</p>
     </div>
     <div class="tabbar">
@@ -317,20 +317,52 @@
         <p class="text-xs text-[#8a97a3] font-bold">總花費</p>
         <p class="text-3xl font-black text-[var(--blue-600)] mt-1">¥{{ totalExpense.toLocaleString() }}</p>
       </div>
-      <div v-for="e in sortedExpenses" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <span class="cat-pill" :class="expenseCatClass(e.category)">{{ e.category }}</span>
-          <div>
-            <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
-            <p class="text-[11px] text-[#8a97a3]">{{ e.date }} ・ {{ e.payment }}</p>
+
+      <div class="flex items-center gap-2 mb-4">
+        <div class="flex-1 flex bg-white rounded-2xl p-1 shadow-sm">
+          <button class="flex-1 py-2 rounded-xl text-sm font-bold" :class="expenseView==='list' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" @click="expenseView='list'">紀錄</button>
+          <button class="flex-1 py-2 rounded-xl text-sm font-bold" :class="expenseView==='settle' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" @click="expenseView='settle'">結算</button>
+        </div>
+        <button class="w-10 h-10 rounded-2xl bg-white shadow-sm text-lg shrink-0" @click="showMembersModal=true">👥</button>
+      </div>
+
+      <template v-if="expenseView==='list'">
+        <div v-for="e in sortedExpenses" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="cat-pill" :class="expenseCatClass(e.category)">{{ e.category }}</span>
+            <div>
+              <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
+              <p class="text-[11px] text-[#8a97a3]">{{ e.date }} ・ {{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
+              <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <p class="font-black text-sm">¥{{ (e.amount||0).toLocaleString() }}</p>
+            <button class="text-[#c3ccd4] text-xs" @click="removeExpense(e.id)">✕</button>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <p class="font-black text-sm">¥{{ (e.amount||0).toLocaleString() }}</p>
-          <button class="text-[#c3ccd4] text-xs" @click="removeExpense(e.id)">✕</button>
+        <p v-if="expenses.length===0" class="text-center text-[#8a97a3] text-sm py-10">還沒有花費紀錄，點右下角「＋」新增</p>
+      </template>
+
+      <template v-else>
+        <div class="card p-4 mb-3">
+          <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">每人餘額</h3>
+          <div v-for="m in members" :key="m" class="flex items-center justify-between py-1.5">
+            <p class="text-sm font-bold">{{ m }}</p>
+            <p class="text-sm font-black" :class="balances[m] > 0.5 ? 'text-emerald-600' : (balances[m] < -0.5 ? 'text-[#c0392b]' : 'text-[#8a97a3]')">
+              {{ balances[m] > 0.5 ? '應收 ¥'+Math.round(balances[m]).toLocaleString() : (balances[m] < -0.5 ? '應付 ¥'+Math.round(-balances[m]).toLocaleString() : '打平') }}
+            </p>
+          </div>
         </div>
-      </div>
-      <p v-if="expenses.length===0" class="text-center text-[#8a97a3] text-sm py-10">還沒有花費紀錄，點右下角「＋」新增</p>
+        <div class="card p-4">
+          <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">建議轉帳</h3>
+          <div v-for="(t,ti) in settlements" :key="ti" class="flex items-center justify-between py-2 border-b last:border-0 border-[#f0f4f8]">
+            <p class="text-sm"><span class="font-bold">{{ t.from }}</span> <span class="text-[#8a97a3]">→</span> <span class="font-bold">{{ t.to }}</span></p>
+            <p class="text-sm font-black text-[var(--blue-600)]">¥{{ t.amount.toLocaleString() }}</p>
+          </div>
+          <p v-if="settlements.length===0" class="text-center text-[#8a97a3] text-sm py-6">目前帳務已打平，不需轉帳</p>
+        </div>
+      </template>
     </div>
 
   </div>
@@ -422,6 +454,26 @@
   </div>
   </transition>
 
+  <!-- ===== Members Modal ===== -->
+  <transition name="fade">
+  <div v-if="showMembersModal" class="modal-mask" @click.self="showMembersModal=false">
+    <div class="modal-panel p-5">
+      <h3 class="font-black text-base mb-4">管理成員</h3>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span v-for="m in members" :key="m" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+          {{ m }}
+          <button class="text-[#c3ccd4]" @click="removeMember(m)">✕</button>
+        </span>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <input v-model="newMemberName" class="field-input flex-1" placeholder="新增成員名稱" @keyup.enter="addMember">
+        <button class="btn-primary px-4" @click="addMember">新增</button>
+      </div>
+      <button class="btn-ghost w-full" @click="showMembersModal=false">完成</button>
+    </div>
+  </div>
+  </transition>
+
   <!-- ===== Expense Modal ===== -->
   <transition name="fade">
   <div v-if="showExpenseModal" class="modal-mask" @click.self="showExpenseModal=false">
@@ -443,6 +495,24 @@
                 :class="expenseForm.payment===p ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
                 @click="expenseForm.payment=p">{{ p }}</button>
       </div>
+
+      <label class="field-label">誰先付的</label>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button v-for="m in members" :key="m" class="px-3 py-1.5 rounded-xl border text-sm"
+                :class="expenseForm.paidBy===m ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                @click="expenseForm.paidBy=m">{{ m }}</button>
+      </div>
+
+      <label class="field-label">由誰分攤（可複選，預設全部）</label>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button v-for="m in members" :key="m" class="px-3 py-1.5 rounded-xl border text-sm"
+                :class="expenseForm.splitAmong.includes(m) ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                @click="toggleSplitMember(m)">{{ m }}</button>
+      </div>
+      <p v-if="expenseForm.amount && expenseForm.splitAmong.length" class="text-[11px] text-[#8a97a3] mb-3">
+        每人分攤 ¥{{ Math.round(expenseForm.amount / expenseForm.splitAmong.length).toLocaleString() }}
+      </p>
+
       <label class="field-label">備註</label>
       <textarea v-model="expenseForm.note" class="field-input mb-4" rows="2"></textarea>
       <button class="btn-primary" @click="saveExpense">新增</button>
@@ -457,7 +527,7 @@
 import { createApp } from 'https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.esm-browser.prod.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {
-  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, setDoc, getDoc,
   onSnapshot, writeBatch, runTransaction, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
@@ -481,6 +551,7 @@ const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOU
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
 const EXPENSE_CATEGORIES = ['交通','飲食','住宿','門票','購物','其他'];
+const DEFAULT_MEMBERS = ['樹懶','大馬','可可','小馬','彥志','林庭','Leo','Pao'];
 
 const uid = () => Math.random().toString(36).slice(2,10);
 
@@ -593,6 +664,14 @@ let db = null;
 const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
 const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
+const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
+
+// idempotent: if the members doc doesn't exist yet, seed it with the default list.
+// safe even if two clients race here since they'd both just write the same default array.
+async function ensureMembersSeeded(){
+  const snap = await getDoc(membersRef());
+  if (!snap.exists()) await setDoc(membersRef(), { list: DEFAULT_MEMBERS });
+}
 
 // one-time transaction-guarded seed of the itinerary into Firestore, so every viewer starts from the same data
 async function ensureSeeded(){
@@ -647,19 +726,57 @@ createApp({
 
       expenses:[],
       showExpenseModal:false,
-      expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'' },
+      expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'', paidBy:'', splitAmong:[] },
+
+      members: [...DEFAULT_MEMBERS],
+      expenseView:'list',
+      showMembersModal:false,
+      newMemberName:'',
     }
   },
   computed:{
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
     sortedExpenses(){ return [...this.expenses].sort((a,b)=> (b.date||'').localeCompare(a.date||'')); },
+    balances(){
+      const bal = {};
+      this.members.forEach(m => { bal[m] = 0; });
+      this.expenses.forEach(e => {
+        const amt = Number(e.amount) || 0;
+        if (!amt) return;
+        const among = (e.splitAmong && e.splitAmong.length) ? e.splitAmong : this.members;
+        const share = amt / among.length;
+        among.forEach(m => { bal[m] = (bal[m] ?? 0) - share; });
+        if (e.paidBy) bal[e.paidBy] = (bal[e.paidBy] ?? 0) + amt;
+      });
+      return bal;
+    },
+    settlements(){
+      const debtors = [], creditors = [];
+      Object.entries(this.balances).forEach(([name, v]) => {
+        if (v > 0.5) creditors.push({ name, amt: v });
+        else if (v < -0.5) debtors.push({ name, amt: -v });
+      });
+      debtors.sort((a,b)=>b.amt-a.amt);
+      creditors.sort((a,b)=>b.amt-a.amt);
+      const txns = [];
+      let i = 0, j = 0;
+      while (i < debtors.length && j < creditors.length){
+        const pay = Math.min(debtors[i].amt, creditors[j].amt);
+        txns.push({ from: debtors[i].name, to: creditors[j].name, amount: Math.round(pay) });
+        debtors[i].amt -= pay; creditors[j].amt -= pay;
+        if (debtors[i].amt < 0.5) i++;
+        if (creditors[j].amt < 0.5) j++;
+      }
+      return txns;
+    },
   },
   watch:{
     activeDayIndex(){ this.loadWeather(); },
     days:{ deep:true, handler(){ this.persist(); } },
     shopping:{ deep:true, handler(){ this.persist(); } },
     expenses:{ deep:true, handler(){ this.persist(); } },
+    members:{ deep:true, handler(){ this.persist(); } },
   },
   async mounted(){
     this.restore();
@@ -670,7 +787,11 @@ createApp({
       const app = initializeApp(FIREBASE_CONFIG);
       db = getFirestore(app);
       await ensureSeeded();
+      await ensureMembersSeeded();
 
+      onSnapshot(membersRef(), (snap) => {
+        if (snap.exists() && Array.isArray(snap.data().list)) this.members = snap.data().list;
+      });
       onSnapshot(itemsCol(), (snap) => {
         const byDate = {};
         snap.forEach(d => {
@@ -845,8 +966,33 @@ createApp({
 
     openAddExpense(){
       const today = new Date().toISOString().slice(0,10);
-      this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'' };
+      this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'', paidBy: this.members[0] || '', splitAmong: [...this.members] };
       this.showExpenseModal = true;
+    },
+    toggleSplitMember(name){
+      const i = this.expenseForm.splitAmong.indexOf(name);
+      if (i>-1) this.expenseForm.splitAmong.splice(i,1);
+      else this.expenseForm.splitAmong.push(name);
+    },
+
+    async addMember(){
+      const name = this.newMemberName.trim();
+      if (!name || this.members.includes(name)) return;
+      const list = [...this.members, name];
+      if (this.cloudEnabled){
+        try{ await setDoc(membersRef(), { list }); }catch(e){ console.error(e); }
+      } else {
+        this.members = list;
+      }
+      this.newMemberName = '';
+    },
+    async removeMember(name){
+      const list = this.members.filter(m => m!==name);
+      if (this.cloudEnabled){
+        try{ await setDoc(membersRef(), { list }); }catch(e){ console.error(e); }
+      } else {
+        this.members = list;
+      }
     },
     async saveExpense(){
       if (this.cloudEnabled){
@@ -866,7 +1012,7 @@ createApp({
 
     persist(){
       try{
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ days:this.days, shopping:this.shopping, expenses:this.expenses }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ days:this.days, shopping:this.shopping, expenses:this.expenses, members:this.members }));
       }catch(e){}
     },
     restore(){
@@ -877,6 +1023,7 @@ createApp({
         if (saved.days && saved.days.length===this.days.length) this.days = saved.days;
         if (saved.shopping) this.shopping = saved.shopping;
         if (saved.expenses) this.expenses = saved.expenses;
+        if (saved.members && saved.members.length) this.members = saved.members;
       }catch(e){}
     },
   }
