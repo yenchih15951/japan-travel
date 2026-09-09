@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>關西行程 | Kansai Trip Planner</title>
-<script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -236,6 +235,13 @@
     <!-- ============ INFO TAB ============ -->
     <div v-if="activeTab==='info'" class="px-4 pt-5 space-y-4">
 
+      <div class="card p-3 flex items-center gap-2">
+        <span class="text-lg">{{ cloudEnabled ? '☁️' : '📴' }}</span>
+        <p class="text-xs font-bold" :class="cloudEnabled ? 'text-[var(--blue-600)]' : 'text-[#8a97a3]'">
+          {{ cloudEnabled ? '雲端同步中，所有人看到的行程/花費/購物清單會即時同步' : '尚未連接雲端資料庫，目前資料只存在這台裝置' }}
+        </p>
+      </div>
+
       <div class="card p-4">
         <h3 class="font-black text-sm mb-3 text-[var(--blue-700)]">💱 匯率換算</h3>
         <div class="flex items-center gap-2">
@@ -447,8 +453,31 @@
 
 </div>
 
-<script>
-const { createApp } = Vue;
+<script type="module">
+import { createApp } from 'https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.esm-browser.prod.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import {
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, writeBatch, runTransaction, serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+// ====================================================================
+// 雲端資料庫設定（Firebase）
+// 1. 到 https://console.firebase.google.com 建立一個免費專案
+// 2. 專案總覽 → </> 新增網頁應用程式 → 複製產生的 firebaseConfig 物件
+// 3. 把下面整包物件換成你自己的設定，其他程式碼都不用動
+// 4. 沒設定之前，App 會自動用「僅本機儲存」模式正常運作
+// ====================================================================
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBuHn2opzCbgLbsR7lNy20Zk43088sVZhI',
+  authDomain: 'japan-travel-23b9d.firebaseapp.com',
+  projectId: 'japan-travel-23b9d',
+  storageBucket: 'japan-travel-23b9d.firebasestorage.app',
+  messagingSenderId: '544034663952',
+  appId: '1:544034663952:web:0339eaa15d049d63bea495',
+};
+const TRIP_ID = 'kansai-2026-11';
+const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
 const EXPENSE_CATEGORIES = ['交通','飲食','住宿','門票','購物','其他'];
@@ -537,6 +566,54 @@ const WCODE_ICON = (code) => {
 
 const STORAGE_KEY = 'kansai-trip-app-v1';
 
+// strip undefined values (Firestore rejects them, unlike null/empty string)
+const cleanData = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v === undefined ? '' : v]));
+
+// downscale + compress a photo dataURL so it stays well under Firestore's 1MB doc limit
+function compressImage(dataUrl, maxSize = 900, quality = 0.6){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxSize || height > maxSize){
+        if (width > height){ height = Math.round(height * maxSize / width); width = maxSize; }
+        else { width = Math.round(width * maxSize / height); height = maxSize; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+let db = null;
+const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
+const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
+const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
+
+// one-time transaction-guarded seed of the itinerary into Firestore, so every viewer starts from the same data
+async function ensureSeeded(){
+  const metaRef = doc(db, 'trips', TRIP_ID, 'meta', 'status');
+  const claimed = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(metaRef);
+    if (snap.exists() && snap.data().seeded) return false;
+    tx.set(metaRef, { seeded: true, seededAt: serverTimestamp() });
+    return true;
+  });
+  if (!claimed) return;
+  const batch = writeBatch(db);
+  seedDays().forEach(day => {
+    day.items.forEach((item, idx) => {
+      const { id, ...rest } = item;
+      batch.set(doc(itemsCol()), cleanData({ ...rest, dayDate: day.date, order: idx }));
+    });
+  });
+  await batch.commit();
+}
+
 createApp({
   data(){
     return {
@@ -548,6 +625,7 @@ createApp({
       ],
       activeTab:'itinerary',
       activeDayIndex:0,
+      cloudEnabled:false,
       days: seedDays(),
       categories: CATEGORIES,
       expenseCategories: EXPENSE_CATEGORIES,
@@ -583,9 +661,38 @@ createApp({
     shopping:{ deep:true, handler(){ this.persist(); } },
     expenses:{ deep:true, handler(){ this.persist(); } },
   },
-  mounted(){
+  async mounted(){
     this.restore();
     this.loadWeather();
+
+    if (!FIREBASE_READY) return;
+    try{
+      const app = initializeApp(FIREBASE_CONFIG);
+      db = getFirestore(app);
+      await ensureSeeded();
+
+      onSnapshot(itemsCol(), (snap) => {
+        const byDate = {};
+        snap.forEach(d => {
+          const data = d.data();
+          (byDate[data.dayDate] ||= []).push({ id: d.id, ...data });
+        });
+        this.days.forEach(day => {
+          day.items = (byDate[day.date] || []).sort((a,b) => (a.order??0) - (b.order??0));
+        });
+      });
+      onSnapshot(shoppingCol(), (snap) => {
+        this.shopping = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      });
+      onSnapshot(expensesCol(), (snap) => {
+        this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      });
+
+      this.cloudEnabled = true;
+    } catch(e){
+      console.error('Firebase init failed, falling back to local-only mode', e);
+      this.cloudEnabled = false;
+    }
   },
   methods:{
     weekdayShort(dateStr){
@@ -654,12 +761,19 @@ createApp({
     },
 
     onDragStart(index){ this.dragIndex = index; },
-    onDrop(index){
+    async onDrop(index){
       if (this.dragIndex===null || this.dragIndex===index) return;
       const items = this.currentDay.items;
       const moved = items.splice(this.dragIndex,1)[0];
       items.splice(index,0,moved);
       this.dragIndex = null;
+      if (this.cloudEnabled){
+        try{
+          const batch = writeBatch(db);
+          items.forEach((it, idx) => batch.update(doc(itemsCol(), it.id), { order: idx }));
+          await batch.commit();
+        } catch(e){ console.error(e); }
+      }
     },
 
     openAddItem(){
@@ -671,50 +785,84 @@ createApp({
     openEdit(item){
       this.itemModal = { show:true, editing:true, dayIndex:this.activeDayIndex, itemId:item.id, data:{ ...item } };
     },
-    saveItem(){
-      const items = this.days[this.itemModal.dayIndex].items;
+    async saveItem(){
+      const { id: _discard, ...data } = cleanData(this.itemModal.data);
       if (this.itemModal.editing){
-        const idx = items.findIndex(i=>i.id===this.itemModal.itemId);
-        if (idx>-1) items[idx] = { ...items[idx], ...this.itemModal.data };
+        if (this.cloudEnabled){
+          try{ await updateDoc(doc(itemsCol(), this.itemModal.itemId), data); }catch(e){ console.error(e); }
+        } else {
+          const items = this.days[this.itemModal.dayIndex].items;
+          const idx = items.findIndex(i=>i.id===this.itemModal.itemId);
+          if (idx>-1) items[idx] = { ...items[idx], ...data };
+        }
       } else {
-        items.push({ id:uid(), ...this.itemModal.data });
+        const day = this.days[this.itemModal.dayIndex];
+        if (this.cloudEnabled){
+          try{ await addDoc(itemsCol(), { ...data, dayDate: day.date, order: day.items.length }); }catch(e){ console.error(e); }
+        } else {
+          day.items.push({ id:uid(), ...data });
+        }
       }
       this.itemModal.show = false;
     },
     confirmDeleteItem(){ this.deleteConfirm.show = true; },
-    doDeleteItem(){
-      const items = this.days[this.itemModal.dayIndex].items;
-      const idx = items.findIndex(i=>i.id===this.itemModal.itemId);
-      if (idx>-1) items.splice(idx,1);
+    async doDeleteItem(){
+      if (this.cloudEnabled){
+        try{ await deleteDoc(doc(itemsCol(), this.itemModal.itemId)); }catch(e){ console.error(e); }
+      } else {
+        const items = this.days[this.itemModal.dayIndex].items;
+        const idx = items.findIndex(i=>i.id===this.itemModal.itemId);
+        if (idx>-1) items.splice(idx,1);
+      }
       this.deleteConfirm.show = false;
       this.itemModal.show = false;
     },
 
-    onShoppingPhoto(e){
+    async onShoppingPhoto(e){
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => { this.shoppingForm.photo = reader.result; };
+      reader.onload = async () => { this.shoppingForm.photo = await compressImage(reader.result); };
       reader.readAsDataURL(file);
     },
-    saveShopping(){
+    async saveShopping(){
       if (!this.shoppingForm.name) return;
-      this.shopping.push({ id:uid(), name:this.shoppingForm.name, photo:this.shoppingForm.photo });
+      if (this.cloudEnabled){
+        try{ await addDoc(shoppingCol(), cleanData({ ...this.shoppingForm, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
+      } else {
+        this.shopping.push({ id:uid(), ...this.shoppingForm });
+      }
       this.shoppingForm = { name:'', photo:'' };
       this.showShoppingModal = false;
     },
-    removeShopping(id){ this.shopping = this.shopping.filter(s=>s.id!==id); },
+    async removeShopping(id){
+      if (this.cloudEnabled){
+        try{ await deleteDoc(doc(shoppingCol(), id)); }catch(e){ console.error(e); }
+      } else {
+        this.shopping = this.shopping.filter(s=>s.id!==id);
+      }
+    },
 
     openAddExpense(){
       const today = new Date().toISOString().slice(0,10);
       this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'' };
       this.showExpenseModal = true;
     },
-    saveExpense(){
-      this.expenses.push({ id:uid(), ...this.expenseForm });
+    async saveExpense(){
+      if (this.cloudEnabled){
+        try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
+      } else {
+        this.expenses.push({ id:uid(), ...this.expenseForm });
+      }
       this.showExpenseModal = false;
     },
-    removeExpense(id){ this.expenses = this.expenses.filter(e=>e.id!==id); },
+    async removeExpense(id){
+      if (this.cloudEnabled){
+        try{ await deleteDoc(doc(expensesCol(), id)); }catch(e){ console.error(e); }
+      } else {
+        this.expenses = this.expenses.filter(e=>e.id!==id);
+      }
+    },
 
     persist(){
       try{
