@@ -327,20 +327,23 @@
       </div>
 
       <template v-if="expenseView==='list'">
-        <div v-for="e in sortedExpenses" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <span class="cat-pill" :class="expenseCatClass(e.category)">{{ e.category }}</span>
-            <div>
-              <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
-              <p class="text-[11px] text-[#8a97a3]">{{ e.date }} ・ {{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
-              <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
+        <template v-for="group in groupedExpenses" :key="group.date">
+          <p class="text-xs font-bold text-[#8a97a3] px-1 mb-2 mt-4 first:mt-0">{{ formatDateHeader(group.date) }}</p>
+          <div v-for="e in group.items" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between cursor-pointer" @click="openEditExpense(e)">
+            <div class="flex items-center gap-3">
+              <span class="cat-pill" :class="expenseCatClass(e.category)">{{ e.category }}</span>
+              <div>
+                <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
+                <p class="text-[11px] text-[#8a97a3]">{{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
+                <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <p class="font-black text-sm">¥{{ (e.amount||0).toLocaleString() }}</p>
+              <button class="text-[#c3ccd4] text-xs" @click.stop="removeExpense(e.id)">✕</button>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <p class="font-black text-sm">¥{{ (e.amount||0).toLocaleString() }}</p>
-            <button class="text-[#c3ccd4] text-xs" @click="removeExpense(e.id)">✕</button>
-          </div>
-        </div>
+        </template>
         <p v-if="expenses.length===0" class="text-center text-[#8a97a3] text-sm py-10">還沒有花費紀錄，點右下角「＋」新增</p>
       </template>
 
@@ -478,7 +481,7 @@
   <transition name="fade">
   <div v-if="showExpenseModal" class="modal-mask" @click.self="showExpenseModal=false">
     <div class="modal-panel p-5">
-      <h3 class="font-black text-base mb-4">新增花費</h3>
+      <h3 class="font-black text-base mb-4">{{ expenseEditingId ? '編輯花費' : '新增花費' }}</h3>
       <label class="field-label">類別</label>
       <select v-model="expenseForm.category" class="field-input mb-3">
         <option v-for="c in expenseCategories" :key="c" :value="c">{{ c }}</option>
@@ -515,7 +518,10 @@
 
       <label class="field-label">備註</label>
       <textarea v-model="expenseForm.note" class="field-input mb-4" rows="2"></textarea>
-      <button class="btn-primary" @click="saveExpense">新增</button>
+      <div class="grid gap-2" :class="expenseEditingId ? 'grid-cols-2' : 'grid-cols-1'">
+        <button class="btn-primary" @click="saveExpense">{{ expenseEditingId ? '儲存' : '新增' }}</button>
+        <button v-if="expenseEditingId" class="btn-danger" @click="removeExpense(expenseEditingId); showExpenseModal=false">刪除</button>
+      </div>
       <button class="btn-ghost w-full mt-2" @click="showExpenseModal=false">取消</button>
     </div>
   </div>
@@ -726,6 +732,7 @@ createApp({
 
       expenses:[],
       showExpenseModal:false,
+      expenseEditingId:null,
       expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'', paidBy:'', splitAmong:[] },
 
       members: [...DEFAULT_MEMBERS],
@@ -738,6 +745,19 @@ createApp({
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
     sortedExpenses(){ return [...this.expenses].sort((a,b)=> (b.date||'').localeCompare(a.date||'')); },
+    groupedExpenses(){
+      const groups = [];
+      let current = null;
+      this.sortedExpenses.forEach(e => {
+        const key = e.date || '';
+        if (!current || current.date !== key){
+          current = { date: key, items: [] };
+          groups.push(current);
+        }
+        current.items.push(e);
+      });
+      return groups;
+    },
     balances(){
       const bal = {};
       this.members.forEach(m => { bal[m] = 0; });
@@ -821,6 +841,11 @@ createApp({
     },
     dayNum(dateStr){
       return Number(dateStr.slice(-2));
+    },
+    formatDateHeader(dateStr){
+      if (!dateStr) return '未填日期';
+      const [y,m,d] = dateStr.split('-').map(Number);
+      return `${y}年${m}月${d}日`;
     },
     catIcon(cat){
       return { '景點':'📍','住宿':'🏨','美食':'🍜','購物':'🛍️','航班':'✈️','其他':'📌' }[cat] || '📌';
@@ -966,7 +991,13 @@ createApp({
 
     openAddExpense(){
       const today = new Date().toISOString().slice(0,10);
+      this.expenseEditingId = null;
       this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'', paidBy: this.members[0] || '', splitAmong: [...this.members] };
+      this.showExpenseModal = true;
+    },
+    openEditExpense(e){
+      this.expenseEditingId = e.id;
+      this.expenseForm = { category:e.category, name:e.name, date:e.date, amount:e.amount, payment:e.payment, note:e.note||'', paidBy:e.paidBy||'', splitAmong: e.splitAmong ? [...e.splitAmong] : [...this.members] };
       this.showExpenseModal = true;
     },
     toggleSplitMember(name){
@@ -995,7 +1026,15 @@ createApp({
       }
     },
     async saveExpense(){
-      if (this.cloudEnabled){
+      if (this.expenseEditingId){
+        const data = cleanData(this.expenseForm);
+        if (this.cloudEnabled){
+          try{ await updateDoc(doc(expensesCol(), this.expenseEditingId), data); }catch(e){ console.error(e); }
+        } else {
+          const idx = this.expenses.findIndex(e=>e.id===this.expenseEditingId);
+          if (idx>-1) this.expenses[idx] = { ...this.expenses[idx], ...data };
+        }
+      } else if (this.cloudEnabled){
         try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
       } else {
         this.expenses.push({ id:uid(), ...this.expenseForm });
