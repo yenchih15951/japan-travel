@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>關西行程 | Kansai Trip Planner</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -365,23 +366,26 @@
           <button class="flex-1 py-2 rounded-xl text-sm font-bold" :class="expenseView==='settle' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" @click="expenseView='settle'">結算</button>
         </div>
         <button class="w-10 h-10 rounded-2xl bg-white shadow-sm text-lg shrink-0" @click="showMembersModal=true">👥</button>
+        <button class="h-10 px-3 rounded-2xl bg-white shadow-sm text-xs font-bold shrink-0 text-[var(--blue-600)] whitespace-nowrap" @click="showIdentityModal=true">{{ myIdentity || '設定身份' }}</button>
       </div>
 
       <template v-if="expenseView==='list'">
         <template v-for="group in groupedExpenses" :key="group.date">
           <p class="text-xs font-bold text-[#8a97a3] px-1 mb-2 mt-4 first:mt-0">{{ formatDateHeader(group.date) }}</p>
-          <div v-for="e in group.items" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between cursor-pointer" @click="openEditExpense(e)">
+          <div v-for="e in group.items" :key="e.id" class="card p-3.5 mb-2.5 flex items-center justify-between cursor-pointer" @click="onExpenseClick(e)">
             <div class="flex items-center gap-3">
               <span class="cat-pill" :class="expenseCatClass(e.category)">{{ e.category }}</span>
               <div>
                 <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
                 <p class="text-[11px] text-[#8a97a3]">{{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
                 <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
+                <p v-if="e.createdBy" class="text-[11px] text-[#c3ccd4]">發起人：{{ e.createdBy }}</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <p class="font-black text-sm">¥{{ (e.amount||0).toLocaleString() }}</p>
-              <button class="text-[#c3ccd4] text-xs" @click.stop="removeExpense(e.id)">✕</button>
+              <button v-if="canEditExpense(e)" class="text-[#c3ccd4] text-xs" @click.stop="removeExpense(e.id)">✕</button>
+              <span v-else class="text-[#c3ccd4] text-xs">🔒</span>
             </div>
           </div>
         </template>
@@ -586,6 +590,64 @@
   </div>
   </transition>
 
+  <!-- ===== Identity Modal ===== -->
+  <transition name="fade">
+  <div v-if="showIdentityModal" class="modal-mask" @click.self="showIdentityModal=false">
+    <div class="modal-panel p-6">
+      <h3 class="font-black text-lg mb-2 text-center">你是誰？</h3>
+      <p class="text-xs text-[#8a97a3] text-center mb-4">選好身份後，你新增的花費只有你自己能編輯或刪除，其他人只能查看</p>
+
+      <button class="w-full mb-4 py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2" style="background:#06C755;" @click="loginWithLine">
+        <span>使用 LINE 登入</span>
+      </button>
+      <p class="text-center text-[11px] text-[#8a97a3] mb-4">— 或手動選擇 —</p>
+
+      <div class="flex flex-wrap gap-2 justify-center mb-4">
+        <button v-for="m in members" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold"
+                :class="myIdentity===m ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                @click="setIdentity(m)">{{ m }}</button>
+      </div>
+      <button class="btn-ghost w-full" @click="skipIdentity">先跳過</button>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ===== LINE Member Mapping Modal ===== -->
+  <transition name="fade">
+  <div v-if="showLineMemberPick" class="modal-mask" @click.self="skipLineMemberPick">
+    <div class="modal-panel p-6">
+      <h3 class="font-black text-lg mb-2 text-center">你是哪一位？</h3>
+      <p class="text-xs text-[#8a97a3] text-center mb-4">已用 LINE 登入{{ lineDisplayName ? '（'+lineDisplayName+'）' : '' }}，選一次對應的成員名字，之後這個 LINE 帳號會自動認出你</p>
+      <div class="flex flex-wrap gap-2 justify-center mb-4">
+        <button v-for="m in members" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold border-[#dfe6ec] text-[#5a6b7a]"
+                @click="confirmLineMember(m)">{{ m }}</button>
+      </div>
+      <button class="btn-ghost w-full" @click="skipLineMemberPick">先跳過</button>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ===== Expense Read-Only Detail Modal ===== -->
+  <transition name="fade">
+  <div v-if="expenseDetailView" class="modal-mask" @click.self="expenseDetailView=null">
+    <div class="modal-panel p-6">
+      <h3 class="font-black text-lg mb-4 text-center">花費詳情</h3>
+      <div class="space-y-3 mb-4">
+        <div><p class="field-label">類別</p><p class="font-bold">{{ expenseDetailView.category }}</p></div>
+        <div><p class="field-label">名稱</p><p class="font-bold">{{ expenseDetailView.name || '（未命名）' }}</p></div>
+        <div><p class="field-label">日期</p><p class="font-bold">{{ expenseDetailView.date || '未填' }}</p></div>
+        <div><p class="field-label">金額（日幣）</p><p class="font-bold">¥{{ (expenseDetailView.amount||0).toLocaleString() }}</p></div>
+        <div><p class="field-label">付款方式</p><p class="font-bold">{{ expenseDetailView.payment }}</p></div>
+        <div><p class="field-label">誰先付的</p><p class="font-bold">{{ expenseDetailView.paidBy || '未指定' }}</p></div>
+        <div v-if="expenseDetailView.splitAmong && expenseDetailView.splitAmong.length"><p class="field-label">由誰分攤</p><p class="font-bold">{{ expenseDetailView.splitAmong.join('、') }}</p></div>
+        <div v-if="expenseDetailView.note"><p class="field-label">備註</p><p class="font-bold whitespace-pre-line">{{ expenseDetailView.note }}</p></div>
+      </div>
+      <p class="text-xs text-[#8a97a3] text-center mb-3">🔒 只有發起人（{{ expenseDetailView.createdBy }}）能編輯或刪除這筆花費</p>
+      <button class="btn-ghost w-full" @click="expenseDetailView=null">關閉</button>
+    </div>
+  </div>
+  </transition>
+
 </div>
 
 <script type="module">
@@ -612,6 +674,7 @@ const FIREBASE_CONFIG = {
   appId: '1:544034663952:web:0339eaa15d049d63bea495',
 };
 const TRIP_ID = 'kansai-2026-11';
+const LIFF_ID = '2011546493-MnrTJGD4';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -737,6 +800,8 @@ const WCODE_ICON = (code) => {
 };
 
 const STORAGE_KEY = 'kansai-trip-app-v1';
+const IDENTITY_KEY = 'kansai-trip-my-identity';
+const IDENTITY_SKIPPED_KEY = 'kansai-trip-identity-skipped';
 
 // strip undefined values (Firestore rejects them, unlike null/empty string)
 const cleanData = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v === undefined ? '' : v]));
@@ -766,6 +831,7 @@ const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
 const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
 const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
+const lineMappingsRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'lineMappings');
 
 // idempotent: if the members doc doesn't exist yet, seed it with the default list.
 // safe even if two clients race here since they'd both just write the same default array.
@@ -831,6 +897,13 @@ createApp({
       showExpenseModal:false,
       expenseEditingId:null,
       expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'', paidBy:'', splitAmong:[] },
+      expenseDetailView:null,
+
+      myIdentity:'',
+      showIdentityModal:false,
+      lineUserId:'',
+      lineDisplayName:'',
+      showLineMemberPick:false,
 
       members: [...DEFAULT_MEMBERS],
       expenseView:'list',
@@ -840,7 +913,7 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showLineMemberPick || !!this.expenseDetailView;
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
@@ -906,11 +979,22 @@ createApp({
       this.showExpenseModal = false;
       this.showShoppingModal = false;
       this.showMembersModal = false;
+      this.showIdentityModal = false;
+      this.expenseDetailView = null;
       this.itemModal.show = false;
       this.deleteConfirm.show = false;
     };
     closeAllModals();
-    window.addEventListener('pageshow', closeAllModals);
+    // only bfcache restores (event.persisted) should force-close modals again —
+    // a plain pageshow fires on every normal load too, and would otherwise wipe out
+    // state we set moments later in this same mounted() hook (e.g. the identity prompt).
+    window.addEventListener('pageshow', (ev) => { if (ev.persisted) closeAllModals(); });
+
+    try{
+      const savedIdentity = localStorage.getItem(IDENTITY_KEY);
+      if (savedIdentity) this.myIdentity = savedIdentity;
+      else if (!localStorage.getItem(IDENTITY_SKIPPED_KEY)) this.showIdentityModal = true;
+    }catch(e){}
 
     this.restore();
     this.loadWeather();
@@ -948,6 +1032,8 @@ createApp({
       console.error('Firebase init failed, falling back to local-only mode', e);
       this.cloudEnabled = false;
     }
+
+    this.initLine();
   },
   methods:{
     weekdayShort(dateStr){
@@ -1191,6 +1277,72 @@ createApp({
       this.expenseForm = { category:e.category, name:e.name, date:e.date, amount:e.amount, payment:e.payment, note:e.note||'', paidBy:e.paidBy||'', splitAmong: e.splitAmong ? [...e.splitAmong] : [...this.members] };
       this.showExpenseModal = true;
     },
+    canEditExpense(e){
+      return !e.createdBy || e.createdBy === this.myIdentity;
+    },
+    onExpenseClick(e){
+      if (this.canEditExpense(e)) this.openEditExpense(e);
+      else this.expenseDetailView = e;
+    },
+    setIdentity(name){
+      this.myIdentity = name;
+      try{ localStorage.setItem(IDENTITY_KEY, name); }catch(e){}
+      this.showIdentityModal = false;
+    },
+    skipIdentity(){
+      try{ localStorage.setItem(IDENTITY_SKIPPED_KEY, '1'); }catch(e){}
+      this.showIdentityModal = false;
+    },
+
+    async initLine(){
+      try{
+        if (!window.liff) return;
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) return;
+        const profile = await liff.getProfile();
+        this.lineUserId = profile.userId;
+        this.lineDisplayName = profile.displayName;
+        const mapped = await this.resolveLineMapping(profile.userId);
+        if (mapped){
+          this.myIdentity = mapped;
+          try{ localStorage.setItem(IDENTITY_KEY, mapped); }catch(e){}
+          this.showIdentityModal = false;
+        } else {
+          this.showIdentityModal = false;
+          this.showLineMemberPick = true;
+        }
+      } catch(e){
+        console.error('LINE login init failed', e);
+      }
+    },
+    loginWithLine(){
+      try{ if (window.liff) liff.login({ redirectUri: window.location.href }); }
+      catch(e){ console.error(e); }
+    },
+    async resolveLineMapping(userId){
+      if (!this.cloudEnabled) return null;
+      try{
+        const snap = await getDoc(lineMappingsRef());
+        if (snap.exists() && snap.data().map && snap.data().map[userId]) return snap.data().map[userId];
+      } catch(e){ console.error(e); }
+      return null;
+    },
+    async confirmLineMember(name){
+      this.myIdentity = name;
+      this.showLineMemberPick = false;
+      try{ localStorage.setItem(IDENTITY_KEY, name); }catch(e){}
+      if (this.cloudEnabled && this.lineUserId){
+        try{
+          const snap = await getDoc(lineMappingsRef());
+          const map = (snap.exists() && snap.data().map) || {};
+          map[this.lineUserId] = name;
+          await setDoc(lineMappingsRef(), { map });
+        } catch(e){ console.error(e); }
+      }
+    },
+    skipLineMemberPick(){
+      this.showLineMemberPick = false;
+    },
     toggleSplitMember(name){
       const i = this.expenseForm.splitAmong.indexOf(name);
       if (i>-1) this.expenseForm.splitAmong.splice(i,1);
@@ -1226,9 +1378,9 @@ createApp({
           if (idx>-1) this.expenses[idx] = { ...this.expenses[idx], ...data };
         }
       } else if (this.cloudEnabled){
-        try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
+        try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdBy:this.myIdentity, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
       } else {
-        this.expenses.push({ id:uid(), ...this.expenseForm });
+        this.expenses.push({ id:uid(), createdBy:this.myIdentity, ...this.expenseForm });
       }
       this.showExpenseModal = false;
     },
