@@ -616,21 +616,6 @@
   </div>
   </transition>
 
-  <!-- ===== LINE Member Mapping Modal ===== -->
-  <transition name="fade">
-  <div v-if="showLineMemberPick" class="modal-mask" @click.self="skipLineMemberPick">
-    <div class="modal-panel p-6">
-      <h3 class="font-black text-lg mb-2 text-center">你是哪一位？</h3>
-      <p class="text-xs text-[#8a97a3] text-center mb-4">已用 LINE 登入{{ lineDisplayName ? '（'+lineDisplayName+'）' : '' }}，選一次對應的成員名字，之後這個 LINE 帳號會自動認出你</p>
-      <div class="flex flex-wrap gap-2 justify-center mb-4">
-        <button v-for="m in members" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold border-[#dfe6ec] text-[#5a6b7a]"
-                @click="confirmLineMember(m)">{{ m }}</button>
-      </div>
-      <button class="btn-ghost w-full" @click="skipLineMemberPick">先跳過</button>
-    </div>
-  </div>
-  </transition>
-
   <!-- ===== Expense Read-Only Detail Modal ===== -->
   <transition name="fade">
   <div v-if="expenseDetailView" class="modal-mask" @click.self="expenseDetailView=null">
@@ -835,7 +820,6 @@ const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
 const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
 const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
-const lineMappingsRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'lineMappings');
 
 // idempotent: if the members doc doesn't exist yet, seed it with the default list.
 // safe even if two clients race here since they'd both just write the same default array.
@@ -907,7 +891,6 @@ createApp({
       showIdentityModal:false,
       lineUserId:'',
       lineDisplayName:'',
-      showLineMemberPick:false,
       toast:'',
 
       members: [...DEFAULT_MEMBERS],
@@ -918,7 +901,7 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showLineMemberPick || !!this.expenseDetailView;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || !!this.expenseDetailView;
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
@@ -1312,17 +1295,11 @@ createApp({
         const profile = await liff.getProfile();
         this.lineUserId = profile.userId;
         this.lineDisplayName = profile.displayName;
-        const mapped = await this.resolveLineMapping(profile.userId);
-        if (mapped){
-          this.myIdentity = mapped;
-          try{ localStorage.setItem(IDENTITY_KEY, mapped); }catch(e){}
-          this.showIdentityModal = false;
-          this.showToast(`☑ LINE 登入成功，歡迎回來，${mapped}`);
-        } else {
-          this.showIdentityModal = false;
-          this.showLineMemberPick = true;
-          this.showToast(`☑ LINE 登入成功（${profile.displayName}），請選擇你是哪一位`);
-        }
+        this.myIdentity = profile.displayName;
+        try{ localStorage.setItem(IDENTITY_KEY, profile.displayName); }catch(e){}
+        this.showIdentityModal = false;
+        await this.ensureMemberInList(profile.displayName);
+        this.showToast(`☑ LINE 登入成功，歡迎，${profile.displayName}`);
       } catch(e){
         console.error('LINE login init failed', e);
         this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
@@ -1340,42 +1317,13 @@ createApp({
         this.showToast('⚠ 無法開啟 LINE 登入：' + (e && e.message ? e.message : String(e)), 6000);
       }
     },
-    async resolveLineMapping(userId){
-      if (!this.cloudEnabled) return null;
-      try{
-        const snap = await getDoc(lineMappingsRef());
-        if (snap.exists() && snap.data().map && snap.data().map[userId]) return snap.data().map[userId];
-      } catch(e){ console.error(e); }
-      return null;
-    },
-    async confirmLineMember(name){
-      this.myIdentity = name;
-      this.showLineMemberPick = false;
-      try{ localStorage.setItem(IDENTITY_KEY, name); }catch(e){}
-      if (this.cloudEnabled && this.lineUserId){
-        try{
-          const snap = await getDoc(lineMappingsRef());
-          const map = (snap.exists() && snap.data().map) || {};
-          map[this.lineUserId] = name;
-          await setDoc(lineMappingsRef(), { map });
-          this.showToast(`☑ 身份已綁定：${name}（下次用 LINE 登入會自動認出你）`);
-        } catch(e){
-          console.error(e);
-          this.showToast('⚠ 綁定失敗，請稍後再試一次', 6000);
-        }
-      }
-    },
-    skipLineMemberPick(){
-      this.showLineMemberPick = false;
-    },
     toggleSplitMember(name){
       const i = this.expenseForm.splitAmong.indexOf(name);
       if (i>-1) this.expenseForm.splitAmong.splice(i,1);
       else this.expenseForm.splitAmong.push(name);
     },
 
-    async addMember(){
-      const name = this.newMemberName.trim();
+    async ensureMemberInList(name){
       if (!name || this.members.includes(name)) return;
       const list = [...this.members, name];
       if (this.cloudEnabled){
@@ -1383,6 +1331,10 @@ createApp({
       } else {
         this.members = list;
       }
+    },
+    async addMember(){
+      const name = this.newMemberName.trim();
+      await this.ensureMemberInList(name);
       this.newMemberName = '';
     },
     async removeMember(name){
