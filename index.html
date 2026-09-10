@@ -133,7 +133,7 @@
     <div class="banner-fade"></div>
     <div class="absolute top-3 left-5 text-white banner-text">
       <p class="text-[10px] font-bold tracking-widest opacity-95">KANSAI TRIP</p>
-      <h1 class="text-lg font-black mt-0.5">關西自由行</h1>
+      <h1 class="text-lg font-black mt-0.5">關西自由行 <span class="text-[9px] font-normal opacity-70 align-middle">{{ appVersion }}</span></h1>
       <p class="text-[10px] font-medium mt-0.5 opacity-95">2026.11.06 - 11.14 ・ 大阪・京都・奈良</p>
     </div>
     <div class="tabbar">
@@ -685,6 +685,9 @@ const FIREBASE_CONFIG = {
 };
 const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
+// bump this string on every deploy so it's obvious from the live page (banner title)
+// whether GitHub Pages has actually picked up the latest push yet.
+const APP_VERSION = 'v1.0.2';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -874,6 +877,7 @@ async function ensureSeeded(){
 createApp({
   data(){
     return {
+      appVersion: APP_VERSION,
       tabs:[
         { key:'itinerary', icon:ICONS.itinerary },
         { key:'expense', icon:ICONS.expense },
@@ -1336,9 +1340,18 @@ createApp({
       this._toastTimer = setTimeout(() => { this.toast = ''; }, ms);
     },
     async initLine(){
+      // TEMP DEBUG: capture the raw callback params before liff.init() has a chance to
+      // touch/strip the URL, so we can tell "no callback present" apart from "callback
+      // present but liff.init() silently rejected it". Remove once diagnosed.
+      const debugRawSearch = location.search;
+      const debugRawHash = location.hash;
       try{
         if (!window.liff){ console.error('LIFF SDK did not load'); return; }
         await liff.init({ liffId: LIFF_ID });
+        alert('LIFF 除錯:\nisLoggedIn=' + liff.isLoggedIn() +
+          '\nrawSearch(init前)=' + debugRawSearch +
+          '\nrawHash(init前)=' + debugRawHash +
+          '\nurl(現在)=' + location.href);
         if (!liff.isLoggedIn()) return; // normal state before the user has tapped "使用 LINE 登入"
         const profile = await liff.getProfile();
         this.lineUserId = profile.userId;
