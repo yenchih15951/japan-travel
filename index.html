@@ -124,6 +124,10 @@
 <body>
 <div id="app" class="app-shell" v-cloak>
 
+  <transition name="fade">
+  <div v-if="toast" class="fixed top-4 left-1/2 z-[60] bg-black/80 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg text-center" style="transform:translateX(-50%); max-width:88vw;">{{ toast }}</div>
+  </transition>
+
   <!-- Banner -->
   <div class="banner">
     <div class="banner-fade"></div>
@@ -904,6 +908,7 @@ createApp({
       lineUserId:'',
       lineDisplayName:'',
       showLineMemberPick:false,
+      toast:'',
 
       members: [...DEFAULT_MEMBERS],
       expenseView:'list',
@@ -1294,11 +1299,16 @@ createApp({
       this.showIdentityModal = false;
     },
 
+    showToast(msg, ms = 4000){
+      this.toast = msg;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(() => { this.toast = ''; }, ms);
+    },
     async initLine(){
       try{
-        if (!window.liff) return;
+        if (!window.liff){ console.error('LIFF SDK did not load'); return; }
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) return;
+        if (!liff.isLoggedIn()) return; // normal state before the user has tapped "使用 LINE 登入"
         const profile = await liff.getProfile();
         this.lineUserId = profile.userId;
         this.lineDisplayName = profile.displayName;
@@ -1307,17 +1317,28 @@ createApp({
           this.myIdentity = mapped;
           try{ localStorage.setItem(IDENTITY_KEY, mapped); }catch(e){}
           this.showIdentityModal = false;
+          this.showToast(`☑ LINE 登入成功，歡迎回來，${mapped}`);
         } else {
           this.showIdentityModal = false;
           this.showLineMemberPick = true;
+          this.showToast(`☑ LINE 登入成功（${profile.displayName}），請選擇你是哪一位`);
         }
       } catch(e){
         console.error('LINE login init failed', e);
+        this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
       }
     },
     loginWithLine(){
-      try{ if (window.liff) liff.login({ redirectUri: window.location.href }); }
-      catch(e){ console.error(e); }
+      // no custom redirectUri: let LIFF fall back to its own registered Endpoint URL,
+      // which avoids a whole class of "redirectUri doesn't match Endpoint URL" login failures.
+      try{
+        if (!window.liff){ this.showToast('⚠ LINE SDK 尚未載入，請稍後再試'); return; }
+        this.showToast('正在跳轉到 LINE 登入…');
+        liff.login();
+      } catch(e){
+        console.error(e);
+        this.showToast('⚠ 無法開啟 LINE 登入：' + (e && e.message ? e.message : String(e)), 6000);
+      }
     },
     async resolveLineMapping(userId){
       if (!this.cloudEnabled) return null;
@@ -1337,7 +1358,11 @@ createApp({
           const map = (snap.exists() && snap.data().map) || {};
           map[this.lineUserId] = name;
           await setDoc(lineMappingsRef(), { map });
-        } catch(e){ console.error(e); }
+          this.showToast(`☑ 身份已綁定：${name}（下次用 LINE 登入會自動認出你）`);
+        } catch(e){
+          console.error(e);
+          this.showToast('⚠ 綁定失敗，請稍後再試一次', 6000);
+        }
       }
     },
     skipLineMemberPick(){
