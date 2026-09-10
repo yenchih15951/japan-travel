@@ -1361,7 +1361,12 @@ createApp({
         this.showToast(`☑ LINE 登入成功，歡迎，${name}`);
       } catch(e){
         console.error('LINE login init failed', e);
-        this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
+        const msg = (e && e.message ? e.message : String(e));
+        this.showToast('⚠ LINE 登入發生錯誤：' + msg, 6000);
+        // TEMP DEBUG: toast can be missed/timed out before the user reads it on a real
+        // device with no remote inspector attached — force a blocking alert so the exact
+        // error text is guaranteed to be seen and reportable. Remove once diagnosed.
+        alert('LINE 登入錯誤（除錯用）:\n' + msg + '\n\nURL: ' + location.href);
       }
     },
     loginWithLine(){
