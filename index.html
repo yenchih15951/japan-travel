@@ -535,7 +535,7 @@
           </span>
           {{ m }}
           <span v-if="memberProfiles[m] && memberProfiles[m].linked" class="text-[10px]" title="已連結 LINE">🟢</span>
-          <button class="text-[#c3ccd4]" @click="removeMember(m)">✕</button>
+          <button class="text-[#c3ccd4]" @click="confirmRemoveMember(m)">✕</button>
         </span>
       </div>
       <p class="text-[11px] text-[#8a97a3] mb-4">🟢 表示這個人已經用 LINE 登入過</p>
@@ -544,6 +544,20 @@
         <button class="btn-primary px-4" @click="addMember">新增</button>
       </div>
       <button class="btn-ghost w-full" @click="showMembersModal=false">完成</button>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ===== Remove Member Confirm ===== -->
+  <transition name="fade">
+  <div v-if="removeMemberConfirm.show" class="modal-mask" @click.self="removeMemberConfirm.show=false">
+    <div class="modal-panel p-5">
+      <p class="font-bold text-center py-2">確定要刪除成員「{{ removeMemberConfirm.name }}」嗎？</p>
+      <p class="text-xs text-[#8a97a3] text-center mb-4">如果他已經用 LINE 綁定過，刪除後這個名字會釋放出來，他下次要用同一個名字得重新綁定；他自己過去的花費紀錄不會被刪除或受影響</p>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn-ghost" @click="removeMemberConfirm.show=false">取消</button>
+        <button class="btn-danger" @click="doRemoveMember">確定刪除</button>
+      </div>
     </div>
   </div>
   </transition>
@@ -612,11 +626,12 @@
       </button>
       <p class="text-center text-[11px] text-[#8a97a3] mb-4">— 或手動選擇 —</p>
 
-      <div class="flex flex-wrap gap-2 justify-center mb-4">
-        <button v-for="m in members" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold"
+      <div v-if="unclaimedMembers.length" class="flex flex-wrap gap-2 justify-center mb-4">
+        <button v-for="m in unclaimedMembers" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold"
                 :class="myIdentity===m ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
                 @click="setIdentity(m)">{{ m }}</button>
       </div>
+      <p v-else class="text-center text-[11px] text-[#8a97a3] mb-4">目前每個人都已經用 LINE 綁定了，請用上面的 LINE 登入</p>
       <button class="btn-ghost w-full" @click="skipIdentity">先跳過</button>
     </div>
   </div>
@@ -883,6 +898,7 @@ createApp({
 
       itemModal:{ show:false, editing:false, dayIndex:0, itemId:null, data:{} },
       deleteConfirm:{ show:false },
+      removeMemberConfirm:{ show:false, name:'' },
 
       shopping:[],
       showShoppingModal:false,
@@ -911,7 +927,10 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || !!this.expenseDetailView;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.removeMemberConfirm.show || !!this.expenseDetailView;
+    },
+    unclaimedMembers(){
+      return this.members.filter(m => !(this.memberProfiles[m] && this.memberProfiles[m].linked));
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
@@ -1399,10 +1418,29 @@ createApp({
       await this.ensureMemberInList(name);
       this.newMemberName = '';
     },
+    confirmRemoveMember(name){
+      this.removeMemberConfirm = { show:true, name };
+    },
+    async doRemoveMember(){
+      const name = this.removeMemberConfirm.name;
+      this.removeMemberConfirm = { show:false, name:'' };
+      await this.removeMember(name);
+    },
     async removeMember(name){
       const list = this.members.filter(m => m!==name);
       if (this.cloudEnabled){
-        try{ await setDoc(membersRef(), { list }); }catch(e){ console.error(e); }
+        try{
+          await setDoc(membersRef(), { list });
+          // also release any LINE binding: without this the name silently comes back
+          // the next time that account logs in, since ensureMemberInList() just re-adds
+          // whatever isn't currently in the list.
+          const snap = await getDoc(memberProfilesRef());
+          if (snap.exists() && Object.prototype.hasOwnProperty.call(snap.data(), name)){
+            const data = { ...snap.data() };
+            delete data[name];
+            await setDoc(memberProfilesRef(), data);
+          }
+        }catch(e){ console.error(e); }
       } else {
         this.members = list;
       }
