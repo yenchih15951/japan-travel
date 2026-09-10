@@ -383,7 +383,7 @@
                 <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
                 <p class="text-[11px] text-[#8a97a3]">{{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
                 <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
-                <p v-if="e.createdBy" class="text-[11px] text-[#c3ccd4]">發起人：{{ e.createdBy }}</p>
+                <p v-if="e.createdBy" class="text-[11px] text-[#c3ccd4]">發起人：{{ e.createdByName || e.createdBy }}</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
@@ -528,11 +528,17 @@
     <div class="modal-panel p-5">
       <h3 class="font-black text-lg mb-4 text-center">管理成員</h3>
       <div class="flex flex-wrap gap-2 mb-4">
-        <span v-for="m in members" :key="m" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+        <span v-for="m in members" :key="m" class="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+          <span class="relative w-6 h-6 rounded-full overflow-hidden bg-[#dfe6ec] flex items-center justify-center text-[10px] text-[#8a97a3] shrink-0">
+            <img v-if="memberProfiles[m] && memberProfiles[m].photo" :src="memberProfiles[m].photo" class="w-full h-full object-cover">
+            <span v-else>{{ m[0] }}</span>
+          </span>
           {{ m }}
+          <span v-if="memberProfiles[m] && memberProfiles[m].linked" class="text-[10px]" title="已連結 LINE">🟢</span>
           <button class="text-[#c3ccd4]" @click="removeMember(m)">✕</button>
         </span>
       </div>
+      <p class="text-[11px] text-[#8a97a3] mb-4">🟢 表示這個人已經用 LINE 登入過</p>
       <div class="flex gap-2 mb-4">
         <input v-model="newMemberName" class="field-input flex-1" placeholder="新增成員名稱" @keyup.enter="addMember">
         <button class="btn-primary px-4" @click="addMember">新增</button>
@@ -631,7 +637,7 @@
         <div v-if="expenseDetailView.splitAmong && expenseDetailView.splitAmong.length"><p class="field-label">由誰分攤</p><p class="font-bold">{{ expenseDetailView.splitAmong.join('、') }}</p></div>
         <div v-if="expenseDetailView.note"><p class="field-label">備註</p><p class="font-bold whitespace-pre-line">{{ expenseDetailView.note }}</p></div>
       </div>
-      <p class="text-xs text-[#8a97a3] text-center mb-3">🔒 只有發起人（{{ expenseDetailView.createdBy }}）能編輯或刪除這筆花費</p>
+      <p class="text-xs text-[#8a97a3] text-center mb-3">🔒 只有發起人（{{ expenseDetailView.createdByName || expenseDetailView.createdBy }}）能編輯或刪除這筆花費</p>
       <button class="btn-ghost w-full" @click="expenseDetailView=null">關閉</button>
     </div>
   </div>
@@ -790,6 +796,7 @@ const WCODE_ICON = (code) => {
 
 const STORAGE_KEY = 'kansai-trip-app-v1';
 const IDENTITY_KEY = 'kansai-trip-my-identity';
+const IDENTITY_KEY_KEY = 'kansai-trip-my-identity-key';
 const IDENTITY_SKIPPED_KEY = 'kansai-trip-identity-skipped';
 
 // strip undefined values (Firestore rejects them, unlike null/empty string)
@@ -820,6 +827,7 @@ const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
 const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
 const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
+const memberProfilesRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'memberProfiles');
 
 // idempotent: if the members doc doesn't exist yet, seed it with the default list.
 // safe even if two clients race here since they'd both just write the same default array.
@@ -888,12 +896,14 @@ createApp({
       expenseDetailView:null,
 
       myIdentity:'',
+      myIdentityKey:'',
       showIdentityModal:false,
       lineUserId:'',
       lineDisplayName:'',
       toast:'',
 
       members: [...DEFAULT_MEMBERS],
+      memberProfiles: {},
       expenseView:'list',
       showMembersModal:false,
       newMemberName:'',
@@ -980,7 +990,12 @@ createApp({
 
     try{
       const savedIdentity = localStorage.getItem(IDENTITY_KEY);
-      if (savedIdentity) this.myIdentity = savedIdentity;
+      if (savedIdentity){
+        this.myIdentity = savedIdentity;
+        // fall back to a "manual:" key for identities saved before this key existed, so
+        // people keep edit rights on their own already-created records after this update.
+        this.myIdentityKey = localStorage.getItem(IDENTITY_KEY_KEY) || ('manual:' + savedIdentity);
+      }
       else if (!localStorage.getItem(IDENTITY_SKIPPED_KEY)) this.showIdentityModal = true;
     }catch(e){}
 
@@ -997,6 +1012,9 @@ createApp({
 
       onSnapshot(membersRef(), (snap) => {
         if (snap.exists() && Array.isArray(snap.data().list)) this.members = snap.data().list;
+      });
+      onSnapshot(memberProfilesRef(), (snap) => {
+        if (snap.exists()) this.memberProfiles = snap.data() || {};
       });
       onSnapshot(itemsCol(), (snap) => {
         const byDate = {};
@@ -1266,15 +1284,26 @@ createApp({
       this.showExpenseModal = true;
     },
     canEditExpense(e){
-      return !e.createdBy || e.createdBy === this.myIdentity;
+      // new records store the unique key (line:<userId> or manual:<name>) in createdBy;
+      // legacy records (created before this) just stored the plain display name — still
+      // honoured via the second check so nobody loses edit rights on their own old data.
+      return !e.createdBy || e.createdBy === this.myIdentityKey || e.createdBy === this.myIdentity;
     },
     onExpenseClick(e){
       if (this.canEditExpense(e)) this.openEditExpense(e);
       else this.expenseDetailView = e;
     },
     setIdentity(name){
+      if (this.memberProfiles[name] && this.memberProfiles[name].linked){
+        this.showToast(`⚠ 「${name}」已經綁定 LINE 帳號，請改用 LINE 登入`, 5000);
+        return;
+      }
       this.myIdentity = name;
-      try{ localStorage.setItem(IDENTITY_KEY, name); }catch(e){}
+      this.myIdentityKey = 'manual:' + name;
+      try{
+        localStorage.setItem(IDENTITY_KEY, name);
+        localStorage.setItem(IDENTITY_KEY_KEY, this.myIdentityKey);
+      }catch(e){}
       this.showIdentityModal = false;
     },
     skipIdentity(){
@@ -1295,11 +1324,22 @@ createApp({
         const profile = await liff.getProfile();
         this.lineUserId = profile.userId;
         this.lineDisplayName = profile.displayName;
-        this.myIdentity = profile.displayName;
-        try{ localStorage.setItem(IDENTITY_KEY, profile.displayName); }catch(e){}
+        this.myIdentityKey = 'line:' + profile.userId;
+
+        // if this exact LINE account already claimed a name before (even under a different
+        // display name last time), reuse that same name instead of creating a duplicate.
+        const existingName = await this.findMemberNameByLineUserId(profile.userId);
+        const name = existingName || profile.displayName;
+
+        this.myIdentity = name;
+        try{
+          localStorage.setItem(IDENTITY_KEY, name);
+          localStorage.setItem(IDENTITY_KEY_KEY, this.myIdentityKey);
+        }catch(e){}
         this.showIdentityModal = false;
-        await this.ensureMemberInList(profile.displayName);
-        this.showToast(`☑ LINE 登入成功，歡迎，${profile.displayName}`);
+        await this.ensureMemberInList(name);
+        await this.saveMemberProfile(name, profile.pictureUrl || '', profile.userId);
+        this.showToast(`☑ LINE 登入成功，歡迎，${name}`);
       } catch(e){
         console.error('LINE login init failed', e);
         this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
@@ -1332,6 +1372,28 @@ createApp({
         this.members = list;
       }
     },
+    async saveMemberProfile(name, photo, lineUserId){
+      if (!this.cloudEnabled || !name) return;
+      try{
+        const snap = await getDoc(memberProfilesRef());
+        const data = (snap.exists() && snap.data()) || {};
+        data[name] = { photo, linked: true, lineUserId };
+        await setDoc(memberProfilesRef(), data);
+      } catch(e){ console.error(e); }
+    },
+    async findMemberNameByLineUserId(userId){
+      if (!this.cloudEnabled) return null;
+      try{
+        const snap = await getDoc(memberProfilesRef());
+        if (snap.exists()){
+          const data = snap.data();
+          for (const [name, info] of Object.entries(data)){
+            if (info && info.lineUserId === userId) return name;
+          }
+        }
+      } catch(e){ console.error(e); }
+      return null;
+    },
     async addMember(){
       const name = this.newMemberName.trim();
       await this.ensureMemberInList(name);
@@ -1355,9 +1417,9 @@ createApp({
           if (idx>-1) this.expenses[idx] = { ...this.expenses[idx], ...data };
         }
       } else if (this.cloudEnabled){
-        try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdBy:this.myIdentity, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
+        try{ await addDoc(expensesCol(), cleanData({ ...this.expenseForm, createdBy:this.myIdentityKey, createdByName:this.myIdentity, createdAt: serverTimestamp() })); }catch(e){ console.error(e); }
       } else {
-        this.expenses.push({ id:uid(), createdBy:this.myIdentity, ...this.expenseForm });
+        this.expenses.push({ id:uid(), createdBy:this.myIdentityKey, createdByName:this.myIdentity, ...this.expenseForm });
       }
       this.showExpenseModal = false;
     },
