@@ -94,8 +94,9 @@
   .cat-其他{ background:#e8ebee; color:#5a6b7a; }
   .drag-handle{ cursor:grab; touch-action:none; user-select:none; }
   .item-dragging{ box-shadow:0 12px 26px rgba(20,60,100,0.3); cursor:grabbing; }
-  .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:center; padding:0 20px; }
-  .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px; max-height:88vh; overflow-y:auto; }
+  .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:center; padding:0 20px; touch-action:none; overscroll-behavior:contain; }
+  .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px; max-height:88vh; overflow-y:auto; touch-action:pan-y; overscroll-behavior:contain; }
+  body.modal-open{ overflow:hidden; }
   .field-label{ font-size:12px; font-weight:700; color:#5a6b7a; margin-bottom:4px; display:block; }
   .field-input{ width:100%; border:none; border-radius:14px; padding:12px 16px; font-size:14px; background:#eef2f6; }
   .field-input:focus{ outline:2px solid var(--blue-500); }
@@ -838,6 +839,9 @@ createApp({
     }
   },
   computed:{
+    anyModalOpen(){
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal;
+    },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
     sortedExpenses(){ return [...this.expenses].sort((a,b)=> (b.date||'').localeCompare(a.date||'')); },
@@ -893,6 +897,7 @@ createApp({
     shopping:{ deep:true, handler(){ this.persist(); } },
     expenses:{ deep:true, handler(){ this.persist(); } },
     members:{ deep:true, handler(){ this.persist(); } },
+    anyModalOpen(open){ document.body.classList.toggle('modal-open', open); },
   },
   async mounted(){
     // some mobile browsers restore a stale cached frame (with a modal still open) for an instant
