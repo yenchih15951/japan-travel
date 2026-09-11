@@ -98,6 +98,7 @@
   .modal-mask{ position:fixed; inset:0; background:rgba(20,35,50,0.45); z-index:50; display:flex; align-items:center; padding:0 20px; touch-action:none; overscroll-behavior:contain; }
   .modal-panel{ background:#fff; width:100%; max-width:480px; margin:0 auto; border-radius:24px; max-height:88vh; overflow-y:auto; touch-action:pan-y; overscroll-behavior:contain; }
   body.modal-open{ overflow:hidden; }
+  body.drag-locking{ overflow:hidden; touch-action:none; overscroll-behavior:contain; }
   .field-label{ font-size:12px; font-weight:700; color:#5a6b7a; margin-bottom:4px; display:block; }
   .field-input{ width:100%; border:none; border-radius:14px; padding:12px 16px; font-size:14px; background:#eef2f6; }
   .field-input:focus{ outline:2px solid var(--blue-500); }
@@ -370,7 +371,7 @@
           <button class="flex-1 py-2 rounded-xl text-sm font-bold" :class="expenseView==='settle' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" @click="expenseView='settle'">結算</button>
         </div>
         <button class="w-10 h-10 rounded-2xl bg-white shadow-sm text-lg shrink-0" @click="showMembersModal=true">👥</button>
-        <button class="h-10 px-3 rounded-2xl bg-white shadow-sm text-xs font-bold shrink-0 text-[var(--blue-600)] whitespace-nowrap" @click="showIdentityModal=true">{{ myIdentity || '設定身份' }}</button>
+        <button class="h-10 px-3 rounded-2xl bg-white shadow-sm text-xs font-bold shrink-0 text-[var(--blue-600)] whitespace-nowrap" @click="onIdentityBadgeClick">{{ myIdentity || '設定身份' }}</button>
       </div>
 
       <template v-if="expenseView==='list'">
@@ -614,6 +615,20 @@
   </div>
   </transition>
 
+  <!-- ===== Identity Info (already-set quick confirm) Modal ===== -->
+  <transition name="fade">
+  <div v-if="showIdentityInfo" class="modal-mask" @click.self="showIdentityInfo=false">
+    <div class="modal-panel p-6">
+      <h3 class="font-black text-lg mb-1 text-center">你是「{{ myIdentity }}」</h3>
+      <p v-if="isLineIdentity" class="text-xs text-[#8a97a3] text-center mb-4">已用 LINE 登入</p>
+      <div v-else class="mb-2"></div>
+      <button v-if="isLineIdentity" class="w-full mb-2 py-3 rounded-xl font-bold text-red-500 border border-red-200" @click="logoutLine">登出 LINE</button>
+      <button v-else class="w-full mb-2 py-3 rounded-xl font-bold text-[var(--blue-600)] border border-[var(--blue-600)]" @click="showIdentityInfo=false; showIdentityModal=true">切換身份</button>
+      <button class="btn-ghost w-full" @click="showIdentityInfo=false">關閉</button>
+    </div>
+  </div>
+  </transition>
+
   <!-- ===== Identity Modal ===== -->
   <transition name="fade">
   <div v-if="showIdentityModal" class="modal-mask" @click.self="showIdentityModal=false">
@@ -687,7 +702,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.3';
+const APP_VERSION = 'v1.0.6';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -918,6 +933,7 @@ createApp({
       myIdentity:'',
       myIdentityKey:'',
       showIdentityModal:false,
+      showIdentityInfo:false,
       lineUserId:'',
       lineDisplayName:'',
       toast:'',
@@ -931,7 +947,10 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.removeMemberConfirm.show || !!this.expenseDetailView;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showIdentityInfo || this.removeMemberConfirm.show || !!this.expenseDetailView;
+    },
+    isLineIdentity(){
+      return !!(this.myIdentityKey && this.myIdentityKey.startsWith('line:'));
     },
     unclaimedMembers(){
       return this.members.filter(m => !(this.memberProfiles[m] && this.memberProfiles[m].linked));
@@ -1001,6 +1020,7 @@ createApp({
       this.showShoppingModal = false;
       this.showMembersModal = false;
       this.showIdentityModal = false;
+      this.showIdentityInfo = false;
       this.expenseDetailView = null;
       this.itemModal.show = false;
       this.deleteConfirm.show = false;
@@ -1153,6 +1173,10 @@ createApp({
       this.dragState = { startY: e.clientY, cardEl };
       cardEl.style.position = 'relative';
       cardEl.style.zIndex = 50;
+      // touch-action:none on the tiny ⠿ handle alone isn't reliably enough on every mobile
+      // browser to stop the page itself from scrolling underneath a drag in progress — lock
+      // body scroll for the whole gesture too, same pattern already used for open modals.
+      document.body.classList.add('drag-locking');
       this._onHandleMove = (ev) => this.onHandleMove(ev);
       this._onHandleUp = (ev) => this.onHandleUp(ev);
       window.addEventListener('pointermove', this._onHandleMove);
@@ -1162,6 +1186,7 @@ createApp({
     async onHandleMove(e){
       const ds = this.dragState;
       if (!ds || this.dragIndex===null) return;
+      e.preventDefault();
       const dy = e.clientY - ds.startY;
       ds.cardEl.style.transform = `translateY(${dy}px)`;
 
@@ -1192,6 +1217,7 @@ createApp({
     },
     async onHandleUp(){
       const ds = this.dragState;
+      document.body.classList.remove('drag-locking');
       window.removeEventListener('pointermove', this._onHandleMove);
       window.removeEventListener('pointerup', this._onHandleUp);
       window.removeEventListener('pointercancel', this._onHandleUp);
@@ -1315,6 +1341,26 @@ createApp({
     onExpenseClick(e){
       if (this.canEditExpense(e)) this.openEditExpense(e);
       else this.expenseDetailView = e;
+    },
+    onIdentityBadgeClick(){
+      // once an identity is already picked, jumping straight back into the full "你是誰？"
+      // picker on every tap felt like being logged out — show a quick confirm instead, and
+      // only open the full picker if they deliberately choose to switch.
+      if (this.myIdentity) this.showIdentityInfo = true;
+      else this.showIdentityModal = true;
+    },
+    logoutLine(){
+      try{
+        if (window.liff && liff.isLoggedIn()) liff.logout();
+      }catch(e){ console.error('liff.logout failed', e); }
+      try{
+        localStorage.removeItem(IDENTITY_KEY);
+        localStorage.removeItem(IDENTITY_KEY_KEY);
+        localStorage.removeItem(IDENTITY_SKIPPED_KEY);
+      }catch(e){}
+      // liff.logout() only clears the SDK's own auth state, not our app state — reload so
+      // mounted()/initLine() re-run clean from scratch rather than patching every field here.
+      location.reload();
     },
     setIdentity(name){
       if (this.memberProfiles[name] && this.memberProfiles[name].linked){
