@@ -136,6 +136,10 @@
   <div v-if="toast" class="fixed top-4 left-1/2 z-[60] bg-black/80 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-lg text-center" style="transform:translateX(-50%); max-width:88vw;">{{ toast }}</div>
   </transition>
 
+  <!-- sync status strip hidden per user's request (2026-09-12) — isOnline/lastSyncedAt/
+       lastSyncedText/markSynced() are all still tracked, just not rendered, in case a
+       better-looking design for this replaces it later -->
+
   <!-- Banner -->
   <div class="banner">
     <div class="banner-fade"></div>
@@ -320,11 +324,14 @@
       <div class="card p-4">
         <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🏨 住宿資訊</h3>
         <div class="border-b border-[#eef2f6] mb-3"></div>
-        <div v-for="h in lodgings" :key="h.id" class="mb-3 last:mb-0 bg-[#f4f8fc] rounded-xl p-3 cursor-pointer" @click="openMapAddress(h.address)">
-          <p class="font-bold">{{ h.name }}</p>
+        <div v-for="h in lodgings" :key="h.id" class="mb-3 last:mb-0 bg-[#f4f8fc] rounded-xl p-3 cursor-pointer relative" @click="openMapAddress(h.address)">
+          <button class="absolute top-3 right-3 text-xs text-[var(--blue-600)] font-bold" @click.stop="openLodgingEdit(h)">編輯</button>
+          <p class="font-bold pr-8">{{ h.name }}</p>
           <p class="text-xs text-[#8a97a3] mt-1">{{ h.dates }}</p>
           <p class="text-xs text-[#5a6b7a] mt-1">📍 {{ h.address }}</p>
           <p v-if="h.phone" class="text-xs text-[#5a6b7a]">📞 {{ h.phone }}</p>
+          <p v-if="lodgingInfo[h.id] && lodgingInfo[h.id].doorCode" class="text-xs text-[#5a6b7a]" @click.stop>🔑 門禁密碼：{{ lodgingInfo[h.id].doorCode }}</p>
+          <p v-if="lodgingInfo[h.id] && lodgingInfo[h.id].wifi" class="text-xs text-[#5a6b7a]" @click.stop>📶 Wifi 密碼：{{ lodgingInfo[h.id].wifi }}</p>
           <p class="text-[11px] text-[var(--blue-600)] font-bold mt-1">點擊導航 →</p>
         </div>
       </div>
@@ -333,6 +340,17 @@
         <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🚗 租車資訊</h3>
         <div class="border-b border-[#eef2f6] mb-3"></div>
         <p class="text-xs text-[#8a97a3]">本次行程以電車／巴士為主，未安排租車。若之後有租車需求，可在此新增資訊。</p>
+      </div>
+
+      <div class="card p-4 relative">
+        <button class="absolute top-4 right-4 text-xs text-[var(--blue-600)] font-bold" @click="openInsuranceEdit">編輯</button>
+        <h3 class="font-black text-sm mb-1 text-[var(--blue-700)]">🛡️ 旅平險</h3>
+        <div class="border-b border-[#eef2f6] mb-3"></div>
+        <template v-if="insuranceInfo.company || insuranceInfo.phone">
+          <p v-if="insuranceInfo.company" class="text-sm font-bold">{{ insuranceInfo.company }}</p>
+          <p v-if="insuranceInfo.phone" class="text-xs text-[#5a6b7a] mt-1">📞 {{ insuranceInfo.phone }}</p>
+        </template>
+        <p v-else class="text-xs text-[#8a97a3]">尚未填寫保單資訊，點右上角「編輯」新增</p>
       </div>
 
       <div class="card p-4">
@@ -426,6 +444,7 @@
           </div>
           <p v-if="settlements.length===0" class="text-center text-[#8a97a3] text-sm py-6">目前帳務已打平，不需轉帳</p>
         </div>
+        <button class="btn-primary w-full mt-3" @click="copySettlementSummary">📋 複製結算結果</button>
       </template>
     </div>
 
@@ -553,7 +572,7 @@
         <p v-if="!linkedMembers.length" class="text-xs text-[#c3ccd4]">還沒有人用 LINE 登入過</p>
       </div>
 
-      <p class="text-[11px] font-bold text-[#8a97a3] mb-2">👤 虛擬成員</p>
+      <p class="text-[11px] font-bold text-[#8a97a3] mb-2">👤 虛擬成員(尚未綁定LINE)</p>
       <div class="flex flex-wrap gap-2 mb-4">
         <span v-for="m in unclaimedMembers" :key="m" class="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl bg-[#f4f8fc] text-sm font-bold">
           <span class="relative w-6 h-6 rounded-full overflow-hidden bg-[#dfe6ec] flex items-center justify-center text-[10px] text-[#8a97a3] shrink-0">{{ m[0] }}</span>
@@ -581,6 +600,40 @@
       <div class="grid grid-cols-2 gap-2">
         <button class="btn-ghost" @click="removeMemberConfirm.show=false">取消</button>
         <button class="btn-danger" @click="doRemoveMember">確定刪除</button>
+      </div>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ===== Lodging Edit Modal ===== -->
+  <transition name="fade">
+  <div v-if="lodgingEditModal.show" class="modal-mask" @click.self="lodgingEditModal.show=false">
+    <div class="modal-panel p-5">
+      <h3 class="font-black text-lg mb-4 text-center">{{ lodgingEditModal.name }}</h3>
+      <label class="field-label">門禁密碼</label>
+      <input v-model="lodgingEditModal.doorCode" class="field-input mb-3" placeholder="到日本後再填入">
+      <label class="field-label">Wifi 密碼</label>
+      <input v-model="lodgingEditModal.wifi" class="field-input mb-4" placeholder="到日本後再填入">
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn-ghost" @click="lodgingEditModal.show=false">取消</button>
+        <button class="btn-primary" @click="saveLodgingEdit">儲存</button>
+      </div>
+    </div>
+  </div>
+  </transition>
+
+  <!-- ===== Insurance Edit Modal ===== -->
+  <transition name="fade">
+  <div v-if="insuranceEditModal.show" class="modal-mask" @click.self="insuranceEditModal.show=false">
+    <div class="modal-panel p-5">
+      <h3 class="font-black text-lg mb-4 text-center">旅平險資訊</h3>
+      <label class="field-label">保險公司/保單名稱</label>
+      <input v-model="insuranceEditModal.company" class="field-input mb-3" placeholder="例：國泰產險">
+      <label class="field-label">緊急聯絡電話</label>
+      <input v-model="insuranceEditModal.phone" class="field-input mb-4" placeholder="例：0800-xxx-xxx">
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn-ghost" @click="insuranceEditModal.show=false">取消</button>
+        <button class="btn-primary" @click="saveInsuranceEdit">儲存</button>
       </div>
     </div>
   </div>
@@ -676,7 +729,7 @@
       <button class="w-full mb-4 py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2" style="background:#06C755;" @click="loginWithLine">
         <span>使用 LINE 登入</span>
       </button>
-      <p class="text-center text-[11px] text-[#8a97a3] mb-4">— 或選擇虛擬成員 —</p>
+      <p class="text-center text-[11px] text-[#8a97a3] mb-4">— 或選擇虛擬成員(尚未綁定LINE) —</p>
 
       <div v-if="unclaimedMembers.length" class="flex flex-wrap gap-2 justify-center mb-4">
         <button v-for="m in unclaimedMembers" :key="m" class="px-4 py-2 rounded-xl border text-sm font-bold"
@@ -739,7 +792,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.20';
+const APP_VERSION = 'v1.0.28';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -903,6 +956,8 @@ const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
 const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
 const memberProfilesRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'memberProfiles');
+const lodgingInfoRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'lodgingInfo');
+const insuranceInfoRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'insurance');
 
 // idempotent: if the members doc doesn't exist yet, seed it with the default list.
 // safe even if two clients race here since they'd both just write the same default array.
@@ -977,6 +1032,12 @@ createApp({
       showIdentityModal:false,
       showIdentityInfo:false,
       showClaimPrompt:false,
+      lodgingInfo:{},
+      lodgingEditModal:{ show:false, id:'', name:'', doorCode:'', wifi:'' },
+      insuranceInfo:{ company:'', phone:'' },
+      insuranceEditModal:{ show:false, company:'', phone:'' },
+      isOnline: navigator.onLine,
+      lastSyncedAt: null,
       lineUserId:'',
       lineDisplayName:'',
       liffInClient:false,
@@ -992,7 +1053,7 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showIdentityInfo || this.showClaimPrompt || this.removeMemberConfirm.show || !!this.expenseDetailView;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showIdentityInfo || this.showClaimPrompt || this.removeMemberConfirm.show || this.lodgingEditModal.show || this.insuranceEditModal.show || !!this.expenseDetailView;
     },
     isLineIdentity(){
       return !!(this.myIdentityKey && this.myIdentityKey.startsWith('line:'));
@@ -1005,6 +1066,10 @@ createApp({
     },
     isAdmin(){
       return this.myIdentity === '彥志';
+    },
+    lastSyncedText(){
+      if (!this.lastSyncedAt) return '';
+      return this.lastSyncedAt.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
@@ -1073,6 +1138,8 @@ createApp({
       this.showIdentityModal = false;
       this.showIdentityInfo = false;
       this.showClaimPrompt = false;
+      this.lodgingEditModal.show = false;
+      this.insuranceEditModal.show = false;
       this.expenseDetailView = null;
       this.itemModal.show = false;
       this.deleteConfirm.show = false;
@@ -1082,6 +1149,8 @@ createApp({
     // a plain pageshow fires on every normal load too, and would otherwise wipe out
     // state we set moments later in this same mounted() hook (e.g. the identity prompt).
     window.addEventListener('pageshow', (ev) => { if (ev.persisted) closeAllModals(); });
+    window.addEventListener('online', () => { this.isOnline = true; });
+    window.addEventListener('offline', () => { this.isOnline = false; });
 
     try{
       const savedIdentity = localStorage.getItem(IDENTITY_KEY);
@@ -1106,12 +1175,23 @@ createApp({
       await ensureMembersSeeded();
 
       onSnapshot(membersRef(), (snap) => {
+        this.markSynced(snap);
         if (snap.exists() && Array.isArray(snap.data().list)) this.members = snap.data().list;
       });
       onSnapshot(memberProfilesRef(), (snap) => {
+        this.markSynced(snap);
         if (snap.exists()) this.memberProfiles = snap.data() || {};
       });
+      onSnapshot(lodgingInfoRef(), (snap) => {
+        this.markSynced(snap);
+        if (snap.exists()) this.lodgingInfo = snap.data() || {};
+      });
+      onSnapshot(insuranceInfoRef(), (snap) => {
+        this.markSynced(snap);
+        if (snap.exists()) this.insuranceInfo = snap.data() || { company:'', phone:'' };
+      });
       onSnapshot(itemsCol(), (snap) => {
+        this.markSynced(snap);
         const byDate = {};
         snap.forEach(d => {
           const data = d.data();
@@ -1122,9 +1202,11 @@ createApp({
         });
       });
       onSnapshot(shoppingCol(), (snap) => {
+        this.markSynced(snap);
         this.shopping = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       });
       onSnapshot(expensesCol(), (snap) => {
+        this.markSynced(snap);
         this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       });
 
@@ -1186,6 +1268,12 @@ createApp({
       }
     },
 
+    markSynced(snap){
+      // snapshot metadata.fromCache is true when Firestore served this from its local
+      // offline cache rather than a fresh round-trip to the server — only count the latter
+      // as an actual "sync", so the indicator doesn't lie about freshness while offline.
+      if (snap && snap.metadata && !snap.metadata.fromCache) this.lastSyncedAt = new Date();
+    },
     formatMoney(amount){
       amount = amount || 0;
       if (this.expenseCurrency === 'TWD'){
@@ -1193,6 +1281,29 @@ createApp({
         return 'NT$' + Math.round(amount * this.fx.rate).toLocaleString();
       }
       return '¥' + amount.toLocaleString();
+    },
+    async copySettlementSummary(){
+      const lines = ['【關西自由行 結算結果】', `總花費：${this.formatMoney(this.totalExpense)}`, '', '每人餘額：'];
+      this.members.forEach(m => {
+        const b = this.balances[m] || 0;
+        if (b > 0.5) lines.push(`${m} 應收 ${this.formatMoney(Math.round(b))}`);
+        else if (b < -0.5) lines.push(`${m} 應付 ${this.formatMoney(Math.round(-b))}`);
+        else lines.push(`${m} 打平`);
+      });
+      lines.push('', '建議轉帳：');
+      if (this.settlements.length){
+        this.settlements.forEach(t => lines.push(`${t.from} → ${t.to} ${this.formatMoney(t.amount)}`));
+      } else {
+        lines.push('目前帳務已打平，不需轉帳');
+      }
+      const text = lines.join('\n');
+      try{
+        await navigator.clipboard.writeText(text);
+        this.showToast('☑ 已複製結算結果，可直接貼到 LINE 群組');
+      }catch(e){
+        console.error('copy settlement summary failed', e);
+        this.showToast('⚠ 複製失敗，請手動截圖分享', 5000);
+      }
     },
     async fetchFxRate(){
       try{
@@ -1576,6 +1687,36 @@ createApp({
         data[name] = { photo, linked: true, lineUserId };
         await setDoc(memberProfilesRef(), data);
       } catch(e){ console.error(e); }
+    },
+    openLodgingEdit(h){
+      const info = this.lodgingInfo[h.id] || {};
+      this.lodgingEditModal = { show:true, id:h.id, name:h.name, doorCode:info.doorCode || '', wifi:info.wifi || '' };
+    },
+    async saveLodgingEdit(){
+      const { id, doorCode, wifi } = this.lodgingEditModal;
+      if (this.cloudEnabled){
+        try{
+          const snap = await getDoc(lodgingInfoRef());
+          const data = (snap.exists() && snap.data()) || {};
+          data[id] = { doorCode: doorCode.trim(), wifi: wifi.trim() };
+          await setDoc(lodgingInfoRef(), data);
+        }catch(e){ console.error(e); this.showToast('⚠ 儲存失敗，請稍後再試'); return; }
+      } else {
+        this.lodgingInfo = { ...this.lodgingInfo, [id]: { doorCode: doorCode.trim(), wifi: wifi.trim() } };
+      }
+      this.lodgingEditModal.show = false;
+    },
+    openInsuranceEdit(){
+      this.insuranceEditModal = { show:true, company:this.insuranceInfo.company || '', phone:this.insuranceInfo.phone || '' };
+    },
+    async saveInsuranceEdit(){
+      const data = { company:this.insuranceEditModal.company.trim(), phone:this.insuranceEditModal.phone.trim() };
+      if (this.cloudEnabled){
+        try{ await setDoc(insuranceInfoRef(), data); }catch(e){ console.error(e); this.showToast('⚠ 儲存失敗，請稍後再試'); return; }
+      } else {
+        this.insuranceInfo = data;
+      }
+      this.insuranceEditModal.show = false;
     },
     async findMemberNameByLineUserId(userId){
       if (!this.cloudEnabled) return null;
