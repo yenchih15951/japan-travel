@@ -687,7 +687,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.2';
+const APP_VERSION = 'v1.0.3';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -1340,18 +1340,9 @@ createApp({
       this._toastTimer = setTimeout(() => { this.toast = ''; }, ms);
     },
     async initLine(){
-      // TEMP DEBUG: capture the raw callback params before liff.init() has a chance to
-      // touch/strip the URL, so we can tell "no callback present" apart from "callback
-      // present but liff.init() silently rejected it". Remove once diagnosed.
-      const debugRawSearch = location.search;
-      const debugRawHash = location.hash;
       try{
         if (!window.liff){ console.error('LIFF SDK did not load'); return; }
         await liff.init({ liffId: LIFF_ID });
-        alert('LIFF 除錯:\nisLoggedIn=' + liff.isLoggedIn() +
-          '\nrawSearch(init前)=' + debugRawSearch +
-          '\nrawHash(init前)=' + debugRawHash +
-          '\nurl(現在)=' + location.href);
         if (!liff.isLoggedIn()) return; // normal state before the user has tapped "使用 LINE 登入"
         const profile = await liff.getProfile();
         this.lineUserId = profile.userId;
@@ -1374,19 +1365,23 @@ createApp({
         this.showToast(`☑ LINE 登入成功，歡迎，${name}`);
       } catch(e){
         console.error('LINE login init failed', e);
-        const msg = (e && e.message ? e.message : String(e));
-        this.showToast('⚠ LINE 登入發生錯誤：' + msg, 6000);
-        // TEMP DEBUG: toast can be missed/timed out before the user reads it on a real
-        // device with no remote inspector attached — force a blocking alert so the exact
-        // error text is guaranteed to be seen and reportable. Remove once diagnosed.
-        alert('LINE 登入錯誤（除錯用）:\n' + msg + '\n\nURL: ' + location.href);
+        this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
       }
     },
     loginWithLine(){
-      // no custom redirectUri: let LIFF fall back to its own registered Endpoint URL,
-      // which avoids a whole class of "redirectUri doesn't match Endpoint URL" login failures.
       try{
         if (!window.liff){ this.showToast('⚠ LINE SDK 尚未載入，請稍後再試'); return; }
+        // liff.login() from a page opened at our own raw domain relies on a Safari ->
+        // native LINE app -> Safari round trip to complete OAuth; on iOS that round trip
+        // often lands in a fresh browser context that has lost the sessionStorage state
+        // liff.login() stashed, so the login silently fails with no error. Going through
+        // LINE's own liff.line.me entry point instead sidesteps that: with the LINE app
+        // installed it opens the official LIFF in-app browser already authenticated, and
+        // otherwise it falls back to LINE's normal login page — both reliable.
+        if (!liff.isInClient()){
+          location.href = 'https://liff.line.me/' + LIFF_ID;
+          return;
+        }
         this.showToast('正在跳轉到 LINE 登入…');
         liff.login();
       } catch(e){
