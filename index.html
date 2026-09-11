@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>關西行程 | Kansai Trip Planner</title>
+<meta name="description" content="2026.11.06-11.14 大阪・京都・奈良 9 天關西自由行——行程、花費分帳、購物清單一站搞定">
+<meta property="og:title" content="關西行程 | Kansai Trip Planner">
+<meta property="og:description" content="2026.11.06-11.14 大阪・京都・奈良 9 天關西自由行——行程、花費分帳、購物清單一站搞定">
+<meta property="og:image" content="https://yenchih15951.github.io/japan-travel/assets/banner.jpg">
+<meta property="og:url" content="https://yenchih15951.github.io/japan-travel/">
+<meta property="og:type" content="website">
 <script src="https://cdn.tailwindcss.com"></script>
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -702,7 +708,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.8';
+const APP_VERSION = 'v1.0.10';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -1437,22 +1443,24 @@ createApp({
       try{
         if (!window.liff){ this.showToast('⚠ LINE SDK 尚未載入，請稍後再試'); return; }
         try{ localStorage.removeItem(IDENTITY_LOGGED_OUT_KEY); }catch(e){}
-        // liff.login() from a page opened at our own raw domain relies on a Safari ->
-        // native LINE app -> Safari round trip to complete OAuth; on iOS that round trip
-        // often lands in a fresh browser context that has lost the sessionStorage state
-        // liff.login() stashed, so the login silently fails with no error. Going through
-        // LINE's own liff.line.me entry point instead sidesteps that: with the LINE app
-        // installed it opens the official LIFF in-app browser already authenticated, and
-        // otherwise it falls back to LINE's normal login page — both reliable.
-        if (!liff.isInClient()){
-          location.href = 'https://liff.line.me/' + LIFF_ID;
-          return;
-        }
-        if (liff.isLoggedIn()){
+        if (liff.isInClient() && liff.isLoggedIn()){
           // already ambiently authenticated inside LINE's own in-app browser (e.g. right
           // after "logging out" of just this app's identity) — re-adopt it directly instead
           // of calling liff.login(), which is a no-op here and wouldn't refire our logic.
           this.tryAdoptLineIdentity();
+          return;
+        }
+        // liff.login() from a page opened at our own raw domain relies on a Safari ->
+        // native LINE app -> Safari round trip to complete OAuth; on iOS that round trip
+        // often lands in a fresh browser context that has lost the sessionStorage state
+        // liff.login() stashed, so the login silently fails with no error. Going through
+        // LINE's own liff.line.me entry point instead sidesteps that — but ONLY on mobile:
+        // on desktop there's no native app to hand off to, so plain liff.login() already
+        // works fine there (confirmed working before this fix existed), and routing desktop
+        // through liff.line.me too broke desktop login entirely instead of helping it.
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile && !liff.isInClient()){
+          location.href = 'https://liff.line.me/' + LIFF_ID;
           return;
         }
         this.showToast('正在跳轉到 LINE 登入…');
