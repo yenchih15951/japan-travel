@@ -377,7 +377,7 @@
           <button class="flex-1 py-2 rounded-xl text-sm font-bold" :class="expenseView==='settle' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" @click="expenseView='settle'">結算</button>
         </div>
         <button class="w-10 h-10 rounded-2xl bg-white shadow-sm text-lg shrink-0" @click="showMembersModal=true">👥</button>
-        <button class="h-10 px-3 rounded-2xl bg-white shadow-sm text-xs font-bold shrink-0 text-[var(--blue-600)] whitespace-nowrap" @click="onIdentityBadgeClick">{{ myIdentity || '設定身份' }}</button>
+        <button class="h-10 px-3 rounded-2xl bg-white shadow-sm text-xs font-bold shrink-0 text-[var(--blue-600)] whitespace-nowrap" @click="onIdentityBadgeClick">{{ myIdentity || '登入' }}</button>
       </div>
 
       <template v-if="expenseView==='list'">
@@ -534,20 +534,31 @@
   <div v-if="showMembersModal" class="modal-mask" @click.self="showMembersModal=false">
     <div class="modal-panel p-5">
       <h3 class="font-black text-lg mb-4 text-center">管理成員</h3>
+
+      <p class="text-[11px] font-bold text-[#8a97a3] mb-2">🟢 LINE 會員</p>
       <div class="flex flex-wrap gap-2 mb-4">
-        <span v-for="m in members" :key="m" class="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+        <span v-for="m in linkedMembers" :key="m" class="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl bg-[#f4f8fc] text-sm font-bold">
           <span class="relative w-6 h-6 rounded-full overflow-hidden bg-[#dfe6ec] flex items-center justify-center text-[10px] text-[#8a97a3] shrink-0">
             <img v-if="memberProfiles[m] && memberProfiles[m].photo" :src="memberProfiles[m].photo" class="w-full h-full object-cover">
             <span v-else>{{ m[0] }}</span>
           </span>
           {{ m }}
-          <span v-if="memberProfiles[m] && memberProfiles[m].linked" class="text-[10px]" title="已連結 LINE">🟢</span>
+          <button class="text-[#c3ccd4]" @click="confirmRemoveMember(m)">✕</button>
+        </span>
+        <p v-if="!linkedMembers.length" class="text-xs text-[#c3ccd4]">還沒有人用 LINE 登入過</p>
+      </div>
+
+      <p class="text-[11px] font-bold text-[#8a97a3] mb-2">👤 虛擬成員</p>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span v-for="m in unclaimedMembers" :key="m" class="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+          <span class="relative w-6 h-6 rounded-full overflow-hidden bg-[#dfe6ec] flex items-center justify-center text-[10px] text-[#8a97a3] shrink-0">{{ m[0] }}</span>
+          {{ m }}
           <button class="text-[#c3ccd4]" @click="confirmRemoveMember(m)">✕</button>
         </span>
       </div>
-      <p class="text-[11px] text-[#8a97a3] mb-4">🟢 表示這個人已經用 LINE 登入過</p>
+
       <div class="flex gap-2 mb-4">
-        <input v-model="newMemberName" class="field-input flex-1" placeholder="新增成員名稱" @keyup.enter="addMember">
+        <input v-model="newMemberName" class="field-input flex-1" placeholder="新增虛擬成員" @keyup.enter="addMember">
         <button class="btn-primary px-4" @click="addMember">新增</button>
       </div>
       <button class="btn-ghost w-full" @click="showMembersModal=false">完成</button>
@@ -722,7 +733,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.12';
+const APP_VERSION = 'v1.0.14';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -981,6 +992,9 @@ createApp({
     },
     unclaimedMembers(){
       return this.members.filter(m => !(this.memberProfiles[m] && this.memberProfiles[m].linked));
+    },
+    linkedMembers(){
+      return this.members.filter(m => this.memberProfiles[m] && this.memberProfiles[m].linked);
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
