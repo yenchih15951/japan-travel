@@ -622,7 +622,7 @@
       <h3 class="font-black text-lg mb-1 text-center">你是「{{ myIdentity }}」</h3>
       <p v-if="isLineIdentity" class="text-xs text-[#8a97a3] text-center mb-4">已用 LINE 登入</p>
       <div v-else class="mb-2"></div>
-      <button v-if="isLineIdentity" class="w-full mb-2 py-3 rounded-xl font-bold text-red-500 border border-red-200" @click="logoutLine">登出 LINE</button>
+      <button v-if="isLineIdentity" class="w-full mb-2 py-3 rounded-xl font-bold text-red-500 border border-red-200" @click="logoutLine">登出</button>
       <button v-else class="w-full mb-2 py-3 rounded-xl font-bold text-[var(--blue-600)] border border-[var(--blue-600)]" @click="showIdentityInfo=false; showIdentityModal=true">切換身份</button>
       <button class="btn-ghost w-full" @click="showIdentityInfo=false">關閉</button>
     </div>
@@ -702,7 +702,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.6';
+const APP_VERSION = 'v1.0.8';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -831,6 +831,11 @@ const STORAGE_KEY = 'kansai-trip-app-v1';
 const IDENTITY_KEY = 'kansai-trip-my-identity';
 const IDENTITY_KEY_KEY = 'kansai-trip-my-identity-key';
 const IDENTITY_SKIPPED_KEY = 'kansai-trip-identity-skipped';
+// set when the user explicitly "logs out" of their LINE-derived identity in-app; this does
+// NOT touch the real LINE session (liff.logout() doesn't reliably work inside LINE's own
+// in-app browser anyway) — it just tells initLine() not to auto-re-adopt that identity next
+// time, even though the underlying liff.isLoggedIn() session is still alive.
+const IDENTITY_LOGGED_OUT_KEY = 'kansai-trip-line-logged-out';
 
 // strip undefined values (Firestore rejects them, unlike null/empty string)
 const cleanData = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v === undefined ? '' : v]));
@@ -936,6 +941,7 @@ createApp({
       showIdentityInfo:false,
       lineUserId:'',
       lineDisplayName:'',
+      liffInClient:false,
       toast:'',
 
       members: [...DEFAULT_MEMBERS],
@@ -1350,17 +1356,20 @@ createApp({
       else this.showIdentityModal = true;
     },
     logoutLine(){
+      // this intentionally does NOT call liff.logout() / touch the real LINE session — that
+      // call is unreliable inside LINE's own in-app browser anyway (see IDENTITY_LOGGED_OUT_KEY
+      // above). It just resets *this app's* notion of who you are back to "nothing picked",
+      // and remembers not to auto-re-adopt the still-alive LINE session next time.
       try{
-        if (window.liff && liff.isLoggedIn()) liff.logout();
-      }catch(e){ console.error('liff.logout failed', e); }
-      try{
+        localStorage.setItem(IDENTITY_LOGGED_OUT_KEY, '1');
         localStorage.removeItem(IDENTITY_KEY);
         localStorage.removeItem(IDENTITY_KEY_KEY);
-        localStorage.removeItem(IDENTITY_SKIPPED_KEY);
       }catch(e){}
-      // liff.logout() only clears the SDK's own auth state, not our app state — reload so
-      // mounted()/initLine() re-run clean from scratch rather than patching every field here.
-      location.reload();
+      this.myIdentity = '';
+      this.myIdentityKey = '';
+      this.showIdentityInfo = false;
+      this.showIdentityModal = true;
+      this.showToast('已登出，可重新選擇身份');
     },
     setIdentity(name){
       if (this.memberProfiles[name] && this.memberProfiles[name].linked){
@@ -1389,34 +1398,45 @@ createApp({
       try{
         if (!window.liff){ console.error('LIFF SDK did not load'); return; }
         await liff.init({ liffId: LIFF_ID });
-        if (!liff.isLoggedIn()) return; // normal state before the user has tapped "使用 LINE 登入"
-        const profile = await liff.getProfile();
-        this.lineUserId = profile.userId;
-        this.lineDisplayName = profile.displayName;
-        this.myIdentityKey = 'line:' + profile.userId;
-
-        // if this exact LINE account already claimed a name before (even under a different
-        // display name last time), reuse that same name instead of creating a duplicate.
-        const existingName = await this.findMemberNameByLineUserId(profile.userId);
-        const name = existingName || profile.displayName;
-
-        this.myIdentity = name;
-        try{
-          localStorage.setItem(IDENTITY_KEY, name);
-          localStorage.setItem(IDENTITY_KEY_KEY, this.myIdentityKey);
-        }catch(e){}
-        this.showIdentityModal = false;
-        await this.ensureMemberInList(name);
-        await this.saveMemberProfile(name, profile.pictureUrl || '', profile.userId);
-        this.showToast(`☑ LINE 登入成功，歡迎，${name}`);
+        this.liffInClient = liff.isInClient();
+        await this.tryAdoptLineIdentity();
       } catch(e){
         console.error('LINE login init failed', e);
         this.showToast('⚠ LINE 登入發生錯誤：' + (e && e.message ? e.message : String(e)), 6000);
       }
     },
+    // returns true if it adopted a LINE identity, false otherwise (not logged in, or the
+    // user had explicitly logged out of this app's identity even though the underlying LIFF
+    // session is still alive — see IDENTITY_LOGGED_OUT_KEY).
+    async tryAdoptLineIdentity(){
+      if (!liff.isLoggedIn()) return false;
+      if (localStorage.getItem(IDENTITY_LOGGED_OUT_KEY)) return false;
+      const profile = await liff.getProfile();
+      this.lineUserId = profile.userId;
+      this.lineDisplayName = profile.displayName;
+      this.myIdentityKey = 'line:' + profile.userId;
+
+      // if this exact LINE account already claimed a name before (even under a different
+      // display name last time), reuse that same name instead of creating a duplicate.
+      const existingName = await this.findMemberNameByLineUserId(profile.userId);
+      const name = existingName || profile.displayName;
+
+      this.myIdentity = name;
+      try{
+        localStorage.setItem(IDENTITY_KEY, name);
+        localStorage.setItem(IDENTITY_KEY_KEY, this.myIdentityKey);
+      }catch(e){}
+      this.showIdentityModal = false;
+      this.showIdentityInfo = false;
+      await this.ensureMemberInList(name);
+      await this.saveMemberProfile(name, profile.pictureUrl || '', profile.userId);
+      this.showToast(`☑ LINE 登入成功，歡迎，${name}`);
+      return true;
+    },
     loginWithLine(){
       try{
         if (!window.liff){ this.showToast('⚠ LINE SDK 尚未載入，請稍後再試'); return; }
+        try{ localStorage.removeItem(IDENTITY_LOGGED_OUT_KEY); }catch(e){}
         // liff.login() from a page opened at our own raw domain relies on a Safari ->
         // native LINE app -> Safari round trip to complete OAuth; on iOS that round trip
         // often lands in a fresh browser context that has lost the sessionStorage state
@@ -1426,6 +1446,13 @@ createApp({
         // otherwise it falls back to LINE's normal login page — both reliable.
         if (!liff.isInClient()){
           location.href = 'https://liff.line.me/' + LIFF_ID;
+          return;
+        }
+        if (liff.isLoggedIn()){
+          // already ambiently authenticated inside LINE's own in-app browser (e.g. right
+          // after "logging out" of just this app's identity) — re-adopt it directly instead
+          // of calling liff.login(), which is a no-op here and wouldn't refire our logic.
+          this.tryAdoptLineIdentity();
           return;
         }
         this.showToast('正在跳轉到 LINE 登入…');
