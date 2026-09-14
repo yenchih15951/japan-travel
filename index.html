@@ -127,6 +127,27 @@
   .fx-swap-icon{
     display:flex; align-items:center; justify-content:center; color:#78e9ff; font-size:16px; flex-shrink:0; width:28px;
   }
+  .wheel-wrap{ position:relative; width:240px; height:240px; margin:0 auto; }
+  .wheel{
+    width:100%; height:100%; border-radius:50%; position:relative;
+    box-shadow:0 6px 20px rgba(20,60,100,0.25), inset 0 0 0 4px rgba(255,255,255,0.9);
+    transform-origin:50% 50%;
+  }
+  .wheel.spinning{ transition: transform 4s cubic-bezier(.13,.77,.13,1); }
+  .wheel-pointer{
+    position:absolute; top:-4px; left:50%; transform:translateX(-50%); z-index:5;
+    width:0; height:0; border-left:11px solid transparent; border-right:11px solid transparent; border-top:20px solid var(--blue-700);
+  }
+  .wheel-label{
+    position:absolute; top:50%; left:50%; width:64px; margin-left:-32px;
+    text-align:center; transform-origin:50% 0%;
+    font-size:11px; font-weight:800; color:#fff; white-space:nowrap;
+    text-shadow:0 1px 2px rgba(0,0,0,0.35);
+  }
+  .wheel-center-dot{
+    position:absolute; top:50%; left:50%; width:16px; height:16px; margin:-8px 0 0 -8px;
+    border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.25); z-index:4;
+  }
 </style>
 </head>
 <body>
@@ -153,6 +174,7 @@
         <span v-html="t.icon"></span>
       </button>
     </div>
+    <button class="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md z-20 text-lg leading-none" @click="openWheel"><span class="leading-none" style="transform:translateY(-2px); display:inline-block;">🎡</span></button>
   </div>
 
   <!-- Main -->
@@ -639,6 +661,59 @@
   </div>
   </transition>
 
+  <!-- ===== Lucky Wheel Modal ===== -->
+  <transition name="fade">
+  <div v-if="showWheelModal" class="modal-mask" @click.self="!wheelSpinning && (showWheelModal=false)">
+    <div class="modal-panel p-5 text-center">
+      <h3 class="font-black text-lg mb-4">幸運轉盤</h3>
+
+      <div class="flex bg-[#f4f8fc] rounded-2xl p-1 mb-4 text-sm font-bold">
+        <button class="flex-1 py-2 rounded-xl" :class="wheelMode==='members' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" :disabled="wheelSpinning" @click="setWheelMode('members')">抽乾爹</button>
+        <button class="flex-1 py-2 rounded-xl" :class="wheelMode==='custom' ? 'bg-[var(--blue-600)] text-white' : 'text-[#8a97a3]'" :disabled="wheelSpinning" @click="setWheelMode('custom')">自訂內容</button>
+      </div>
+
+      <div class="wheel-wrap mb-4">
+        <div class="wheel-pointer"></div>
+        <div class="wheel" :class="{spinning: wheelSpinning}" :style="{ background: wheelGradient, transform: 'rotate(' + wheelRotation + 'deg)' }">
+          <span v-for="l in wheelLabels" :key="l.name" class="wheel-label" :style="{ transform: 'rotate(' + l.angle + 'deg) translateY(-88px)' }">{{ l.name }}</span>
+        </div>
+        <div class="wheel-center-dot"></div>
+      </div>
+
+      <p v-if="wheelResult && wheelMode==='members'" class="font-black text-xl text-[var(--blue-600)] mb-3">🎉 謝謝 {{ wheelResult }} 斗內</p>
+      <p v-else-if="wheelResult" class="font-black text-xl text-[var(--blue-600)] mb-3">🎉 結果：{{ wheelResult }}</p>
+      <p v-else-if="wheelSelected.length < 2" class="text-xs text-[#8a97a3] mb-3">至少要有 2 個項目才能轉</p>
+
+      <template v-if="wheelMode==='members'">
+        <div class="flex flex-wrap gap-2 justify-center mb-4">
+          <button v-for="m in members" :key="m" class="px-3 py-1.5 rounded-xl border text-xs font-bold"
+                  :class="wheelSelected.includes(m) ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                  :disabled="wheelSpinning"
+                  @click="toggleWheelMember(m)">{{ m }}</button>
+        </div>
+      </template>
+      <template v-else>
+        <div class="flex gap-2 mb-3">
+          <input v-model="wheelCustomInput" class="field-input flex-1" placeholder="輸入內容，例如：吃拉麵" :disabled="wheelSpinning" @keyup.enter="addWheelCustomItem">
+          <button class="btn-primary px-4" :disabled="wheelSpinning" @click="addWheelCustomItem">新增</button>
+        </div>
+        <div class="flex flex-wrap gap-2 justify-center mb-4">
+          <span v-for="v in wheelSelected" :key="v" class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-[#f4f8fc] text-sm font-bold">
+            {{ v }}
+            <button class="text-[#c3ccd4]" :disabled="wheelSpinning" @click="removeWheelCustomItem(v)">✕</button>
+          </span>
+          <p v-if="!wheelSelected.length" class="text-xs text-[#c3ccd4] py-2">還沒有加入任何內容，在上面輸入後按「新增」</p>
+        </div>
+      </template>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn-ghost" :disabled="wheelSpinning" @click="showWheelModal=false">關閉</button>
+        <button class="btn-primary" :disabled="wheelSpinning || wheelSelected.length < 2" @click="spinWheel">{{ wheelSpinning ? '轉動中…' : '開始轉' }}</button>
+      </div>
+    </div>
+  </div>
+  </transition>
+
   <!-- ===== Expense Modal ===== -->
   <transition name="fade">
   <div v-if="showExpenseModal" class="modal-mask" @click.self="showExpenseModal=false">
@@ -792,7 +867,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.28';
+const APP_VERSION = 'v1.0.40';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -1038,6 +1113,13 @@ createApp({
       insuranceEditModal:{ show:false, company:'', phone:'' },
       isOnline: navigator.onLine,
       lastSyncedAt: null,
+      showWheelModal:false,
+      wheelMode:'members',
+      wheelSelected:[],
+      wheelCustomInput:'',
+      wheelSpinning:false,
+      wheelRotation:0,
+      wheelResult:null,
       lineUserId:'',
       lineDisplayName:'',
       liffInClient:false,
@@ -1053,7 +1135,7 @@ createApp({
   },
   computed:{
     anyModalOpen(){
-      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showIdentityInfo || this.showClaimPrompt || this.removeMemberConfirm.show || this.lodgingEditModal.show || this.insuranceEditModal.show || !!this.expenseDetailView;
+      return this.itemModal.show || this.deleteConfirm.show || this.showShoppingModal || this.showMembersModal || this.showExpenseModal || this.showIdentityModal || this.showIdentityInfo || this.showClaimPrompt || this.removeMemberConfirm.show || this.lodgingEditModal.show || this.insuranceEditModal.show || this.showWheelModal || !!this.expenseDetailView;
     },
     isLineIdentity(){
       return !!(this.myIdentityKey && this.myIdentityKey.startsWith('line:'));
@@ -1070,6 +1152,23 @@ createApp({
     lastSyncedText(){
       if (!this.lastSyncedAt) return '';
       return this.lastSyncedAt.toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+    },
+    wheelGradient(){
+      const n = this.wheelSelected.length;
+      if (n < 2) return '#e2e8f0';
+      const colors = ['#f87171','#fb923c','#fbbf24','#4ade80','#22d3ee','#60a5fa','#a78bfa','#f472b6'];
+      const step = 360 / n;
+      const stops = [];
+      for (let i=0;i<n;i++){
+        stops.push(`${colors[i % colors.length]} ${i*step}deg ${(i+1)*step}deg`);
+      }
+      return `conic-gradient(${stops.join(', ')})`;
+    },
+    wheelLabels(){
+      const n = this.wheelSelected.length;
+      if (n < 2) return [];
+      const step = 360 / n;
+      return this.wheelSelected.map((name, i) => ({ name, angle: i*step + step/2 }));
     },
     currentDay(){ return this.days[this.activeDayIndex]; },
     totalExpense(){ return this.expenses.reduce((s,e)=> s + (Number(e.amount)||0), 0); },
@@ -1140,6 +1239,7 @@ createApp({
       this.showClaimPrompt = false;
       this.lodgingEditModal.show = false;
       this.insuranceEditModal.show = false;
+      this.showWheelModal = false;
       this.expenseDetailView = null;
       this.itemModal.show = false;
       this.deleteConfirm.show = false;
@@ -1717,6 +1817,72 @@ createApp({
         this.insuranceInfo = data;
       }
       this.insuranceEditModal.show = false;
+    },
+    openWheel(){
+      this.wheelMode = 'members';
+      this.wheelSelected = [...this.members];
+      this.wheelCustomInput = '';
+      this.wheelResult = null;
+      this.wheelSpinning = false;
+      this.wheelRotation = 0;
+      this.showWheelModal = true;
+    },
+    setWheelMode(mode){
+      if (this.wheelSpinning || mode === this.wheelMode) return;
+      this.wheelMode = mode;
+      this.wheelResult = null;
+      this.wheelSelected = mode === 'members' ? [...this.members] : [];
+    },
+    toggleWheelMember(m){
+      if (this.wheelSpinning) return;
+      const i = this.wheelSelected.indexOf(m);
+      if (i > -1) this.wheelSelected.splice(i, 1);
+      else this.wheelSelected.push(m);
+      this.wheelResult = null;
+    },
+    addWheelCustomItem(){
+      const v = this.wheelCustomInput.trim();
+      if (!v || this.wheelSelected.includes(v)){ this.wheelCustomInput = ''; return; }
+      this.wheelSelected.push(v);
+      this.wheelCustomInput = '';
+      this.wheelResult = null;
+    },
+    removeWheelCustomItem(v){
+      if (this.wheelSpinning) return;
+      const i = this.wheelSelected.indexOf(v);
+      if (i > -1) this.wheelSelected.splice(i, 1);
+      this.wheelResult = null;
+    },
+    async spinWheel(){
+      if (this.wheelSpinning || this.wheelSelected.length < 2) return;
+      this.wheelResult = null;
+      const n = this.wheelSelected.length;
+      const winnerIndex = Math.floor(Math.random() * n);
+      const step = 360 / n;
+      const winnerMid = winnerIndex * step + step / 2;
+      // pointer is fixed at the top (0deg); spin several full turns, then land exactly on
+      // the winning slice's midpoint under the pointer.
+      const finalAngle = 5 * 360 + (360 - winnerMid);
+
+      // reset to 0 with the transition disabled first, so the next spin always starts from
+      // a clean angle instead of accumulating (and the reset itself doesn't visibly animate).
+      this.wheelSpinning = false;
+      this.wheelRotation = 0;
+      // $nextTick() alone isn't enough here — it resolves once Vue has patched the DOM, but
+      // that can still happen before the browser actually paints a frame, so the "reset to
+      // 0deg, no transition" state and the very next "add transition, rotate to finalAngle"
+      // state can get coalesced into a single paint with no animation at all (the wheel just
+      // snaps straight to its end position). Waiting two real animation frames guarantees the
+      // reset is actually rendered first, so the transition reliably plays every time.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      this.wheelSpinning = true;
+      this.wheelRotation = finalAngle;
+
+      clearTimeout(this._wheelTimer);
+      this._wheelTimer = setTimeout(() => {
+        this.wheelResult = this.wheelSelected[winnerIndex];
+        this.wheelSpinning = false;
+      }, 4200);
     },
     async findMemberNameByLineUserId(userId){
       if (!this.cloudEnabled) return null;
