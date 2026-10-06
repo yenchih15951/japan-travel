@@ -867,7 +867,7 @@ const TRIP_ID = 'kansai-2026-11';
 const LIFF_ID = '2011546493-MnrTJGD4';
 // bump this string on every deploy so it's obvious from the live page (banner title)
 // whether GitHub Pages has actually picked up the latest push yet.
-const APP_VERSION = 'v1.0.40';
+const APP_VERSION = 'v1.0.41';
 const FIREBASE_READY = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'YOUR_API_KEY';
 
 const CATEGORIES = ['景點','住宿','美食','購物','航班','其他'];
@@ -918,63 +918,67 @@ function seedDays(){
 
   return [
     { date:'2026-11-06', city:'大阪', summary:'台北 → 大阪（神戶機場）', lat:34.6937, lon:135.5023, items:[
-      mk('航班','', { airportFrom:'TPE', airportTo:'UKB', depTime:'14:30', arrTime:'18:00', duration:'約3小時', flightNo:'', note:'12:30 桃園機場報到，18:30 入境手續/拿行李，19:30 前往市區，19:30 Check-in', transitMode:'car', transitDuration:'' }),
-      mk('美食','う頂天（鰻魚飯）', { time:'晚餐', transitMode:'walk', transitDuration:'步行約10分鐘' }),
-      mk('住宿','大阪 Airbnb（福島）', { time:'Check-in', hours:'', address:'大阪府大阪市福島區福島5丁目9-11', transitMode:'walk', transitDuration:'步行約5分鐘' }),
+      mk('航班','', { airportFrom:'TPE', airportTo:'UKB', depTime:'14:30', arrTime:'18:00', duration:'約3小時', flightNo:'', note:'11:30 出門，12:30 桃園機場報到（午餐：桃園機場內）；18:30 入境手續/拿行李，19:30 前往市區', transitMode:'car', transitDuration:'' }),
+      mk('住宿','大阪 Airbnb（福島）', { time:'19:30 Check-in', address:'大阪府大阪市福島區福島5丁目9-11', transitMode:'car', transitDuration:'神戶機場 → 市區' }),
+      mk('美食','う頂天 京橋店（鰻魚飯）', { time:'20:30（已預約）', address:'大阪府大阪市都島區東野田町1-5-1', transitMode:'transit', transitDuration:'' }),
     ]},
-    { date:'2026-11-07', city:'大阪', summary:'大阪市區・梅田百貨', lat:34.6937, lon:135.5023, items:[
-      mk('購物','梅田百貨', { time:'10:00 出門', transitMode:'car', transitDuration:'' }),
-      mk('美食','市區午晚餐（待找）', { time:'午餐/晚餐', transitMode:'walk', transitDuration:'' }),
-      mk('其他','Burlesque Osaka', { time:'晚上', transitMode:'car', transitDuration:'' }),
+    { date:'2026-11-07', city:'大阪', summary:'箕面・勝尾寺・猪名川花火大会', lat:34.8268, lon:135.4705, items:[
+      mk('美食',"musi-vege+cafe 箕面Q's Mall店", { time:'午餐', note:'10:30 出門', transitMode:'transit', transitDuration:'梅田 → 箕面 搭車約1小時' }),
+      mk('景點','勝尾寺', { time:'12:30-14:30', transitMode:'car', transitDuration:'箕面 → 勝尾寺 阪急巴士30號（12:20／12:40／13:00／13:30）' }),
+      mk('景點','猪名川花火大会', { time:'16:00-19:00', note:'打ち上げ時間 18:00～18:30', transitMode:'transit', transitDuration:'箕面 → 池田 搭車約1.5小時' }),
+      mk('美食','肉ときどきレモンサワー。梅田店（居酒屋）', { time:'晚餐', note:'花火大會回來看情況', transitMode:'transit', transitDuration:'' }),
     ]},
-    { date:'2026-11-08', city:'大阪', summary:'勝尾寺・大阪城', lat:34.6937, lon:135.5023, items:[
-      mk('景點','勝尾寺', { time:'10:30-12:00', transitMode:'car', transitDuration:'大阪城→箕面 開車約1小時（阪急巴士）', note:'10:00 出門，先到大阪城再往箕面' }),
-      mk('美食','勝尾寺周邊（待找）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
-      mk('景點','大阪城', { time:'15:00-17:00', transitMode:'car', transitDuration:'箕面→大阪城 開車約1.5小時' }),
-      mk('美食','和デメキン（螃蟹懷石）', { time:'晚餐', transitMode:'car', transitDuration:'' }),
-      mk('其他','Burlesque Osaka（Option）', { time:'晚上', transitMode:'walk', transitDuration:'' }),
-    ]},
-    { date:'2026-11-09', city:'大阪', summary:'大阪環球影城（USJ）', lat:34.6654, lon:135.4323, items:[
-      mk('景點','大阪環球影城 USJ（快通VIP）', { time:'08:00 出門', hours:'依當日公告為準', ticket:'快速通關 VIP 套票（必買）', note:'必去：任天堂世界／哈利波特／芙莉蓮', transitMode:'transit', transitDuration:'梅田→櫻島 電車約30分鐘' }),
+    { date:'2026-11-08', city:'大阪', summary:'大阪環球影城（USJ）', lat:34.6654, lon:135.4323, items:[
+      mk('景點','大阪環球影城 USJ（快通4）', { time:'08:00 出門', hours:'依當日公告為準', ticket:'環球門票 + 快速通關4', note:'必去：任天堂世界／哈利波特／芙莉蓮', transitMode:'transit', transitDuration:'梅田 → 櫻島 搭車約30分鐘' }),
       mk('美食','哈利波特 / 奇諾比奧餐廳（二選一，待討論）', { time:'午餐', transitMode:'walk', transitDuration:'園區內' }),
-      mk('美食','梅田（待找）', { time:'晚餐', transitMode:'transit', transitDuration:'櫻島→梅田 電車約30分鐘' }),
+      mk('美食','ニブタ食堂（豬肉和食）', { time:'晚餐', note:'環球玩回來看情況', transitMode:'transit', transitDuration:'櫻島 → 梅田 搭車約30分鐘' }),
+    ]},
+    { date:'2026-11-09', city:'大阪', summary:'自由日', lat:34.6937, lon:135.5023, items:[
+      mk('美食','grenier', { time:'10:00 出門', note:'Pao 去銀行辦事', transitMode:'walk', transitDuration:'' }),
+      mk('購物','友都八喜 梅田店', { time:'上午', transitMode:'walk', transitDuration:'' }),
+      mk('購物','日本橋／近鐵百貨', { time:'下午', note:'看要不要去通天閣＆心齋橋之類的', transitMode:'transit', transitDuration:'' }),
+      mk('其他','Burlesque Osaka', { time:'晚上', transitMode:'transit', transitDuration:'' }),
     ]},
     { date:'2026-11-10', city:'大阪', summary:'海遊館・天保山', lat:34.6547, lon:135.4290, items:[
-      mk('景點','海遊館', { time:'10:30-13:00', transitMode:'transit', transitDuration:'梅田→櫻島 電車約30分鐘', note:'10:30 出門' }),
-      mk('美食','天保山購物中心（待找）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
-      mk('景點','天保山購物中心／聖瑪麗亞號／大摩天輪', { time:'13:00-18:00', ticket:'登頂證明書可加購', transitMode:'walk', transitDuration:'' }),
-      mk('美食','梅田（待找）', { time:'晚餐', transitMode:'car', transitDuration:'' }),
+      mk('景點','海遊館', { time:'10:30-13:00', note:'10:30 出門', transitMode:'transit', transitDuration:'梅田 → 大阪港 搭車約30分鐘' }),
+      mk('美食','逢阪にこにこ庵（烏龍麵）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
+      mk('景點','天保山購物中心／聖瑪麗亞號／大摩天輪', { time:'13:00-18:00', ticket:'天保山登頂證明書', transitMode:'walk', transitDuration:'' }),
+      mk('美食','加とう 大阪福島（文字燒）', { time:'19:00（已預約）', transitMode:'transit', transitDuration:'' }),
     ]},
     { date:'2026-11-11', city:'京都', summary:'嵐山線・退房前往京都', lat:35.0094, lon:135.6675, items:[
-      mk('景點','寄放行李、換小包（京都）', { time:'10:00', transitMode:'transit', transitDuration:'梅田→京都 電車約1小時；09:00 退房出門' }),
-      mk('景點','嵐山小火車', { time:'', transitMode:'transit', transitDuration:'京都→嵐山 電車約30分鐘' }),
-      mk('美食','嵐山周邊（待找）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
-      mk('景點','保津川遊船・竹林小徑&野宮神社・渡月橋', { time:'12:00-16:30', transitMode:'walk', transitDuration:'' }),
-      mk('美食','京都市區（待找）', { time:'晚餐', transitMode:'car', transitDuration:'' }),
-      mk('住宿','京都 Airbnb（東九條）', { time:'Check-in', address:'京都府京都市南區東九條室町32-2', transitMode:'car', transitDuration:'' }),
+      mk('景點','寄放行李、換小包（京都）', { time:'10:00', transitMode:'transit', transitDuration:'09:00 退房出門，梅田 → 京都 搭車約1小時' }),
+      mk('景點','嵐山小火車', { time:'11:02', transitMode:'transit', transitDuration:'京都 → 嵐山 搭車約30分鐘' }),
+      mk('景點','保津川遊船', { time:'12:00（已預約）', note:'約1.5-2小時', transitMode:'walk', transitDuration:'' }),
+      mk('美食','嵯峨野（湯豆腐）', { time:'14:00（已預約）', transitMode:'walk', transitDuration:'' }),
+      mk('景點','渡月橋・竹林小徑＆野宮神社', { time:'～17:30', transitMode:'walk', transitDuration:'' }),
+      mk('住宿','京都 Airbnb（東九條）', { time:'Check-in', address:'京都府京都市南區東九條室町32-2', transitMode:'transit', transitDuration:'嵐山 → 京都' }),
+      mk('美食','あいよっ！京都八条口店（居酒屋）', { time:'20:00（已預約）', transitMode:'walk', transitDuration:'' }),
     ]},
-    { date:'2026-11-12', city:'京都', summary:'東山線・清水寺・祇園', lat:35.0116, lon:135.7681, items:[
-      mk('景點','清水寺・二年坂／三年坂', { time:'10:00 退房出門', transitMode:'transit', transitDuration:'京都→五条 電車約30分鐘' }),
-      mk('美食','清水寺周邊（待找）', { time:'午餐', transitMode:'walk', transitDuration:'' }),
-      mk('景點','八坂神社・花見小路／祇園白川', { time:'', note:'Option：伏見稲荷大社／和服體驗', transitMode:'walk', transitDuration:'' }),
-      mk('美食','京都市區 or 稻荷（待找）', { time:'晚餐', transitMode:'walk', transitDuration:'' }),
+    { date:'2026-11-12', city:'京都', summary:'東山線・清水寺・二条城', lat:35.0116, lon:135.7681, items:[
+      mk('景點','清水寺・二年坂／三年坂', { time:'10:30-14:00', transitMode:'transit', transitDuration:'10:00 出門，京都 → 五条 搭車約30分鐘' }),
+      mk('美食','清修庵 清水店（蕎麥麵）', { time:'11:30（已預約）', transitMode:'walk', transitDuration:'' }),
+      mk('景點','二条城', { time:'14:30-17:00', note:'二条城 → 吃飯 → 回車站逛', transitMode:'transit', transitDuration:'清水 → 二条 搭車約30分鐘' }),
+      mk('美食','桔梗（壽司）', { time:'17:30（已預約）', transitMode:'transit', transitDuration:'' }),
     ]},
-    { date:'2026-11-13', city:'奈良', summary:'奈良公園・東大寺', lat:34.6851, lon:135.8048, items:[
-      mk('美食','京都 いとおかし（烤鮭魚）', { time:'午餐', transitMode:'transit', transitDuration:'10:00 退房出門，京都→奈良 電車約1小時' }),
-      mk('景點','寄行李・奈良公園', { time:'11:00-13:00', transitMode:'walk', transitDuration:'' }),
+    { date:'2026-11-13', city:'奈良', summary:'奈良公園・東大寺 → 大阪', lat:34.6851, lon:135.8048, items:[
+      mk('美食','京都 いとおかし（烤鮭魚）', { time:'10:30（已預約）', note:'09:30 退房出門', transitMode:'transit', transitDuration:'' }),
+      mk('景點','寄行李・奈良公園', { time:'12:00-14:00', transitMode:'transit', transitDuration:'京都 → 奈良 搭車約1小時' }),
       mk('景點','東大寺・春日大社・三條通／中谷堂', { time:'14:00-16:30', transitMode:'walk', transitDuration:'' }),
+      mk('住宿','大阪住宿（梅田／難波，待找）', { time:'Check-in', transitMode:'transit', transitDuration:'奈良 → 梅田 搭車約1小時' }),
+      mk('美食','和デメキン（螃蟹）', { time:'19:30（已預約）', transitMode:'transit', transitDuration:'' }),
     ]},
-    { date:'2026-11-14', city:'大阪', summary:'木津卸賣市場 → 大阪（神戶機場）→ 台北', lat:34.6937, lon:135.5023, items:[
-      mk('購物','木津卸賣市場', { time:'09:30', note:'09:00 退房出門並寄放行李', transitMode:'transit', transitDuration:'奈良→梅田 電車約1小時' }),
-      mk('美食','關西機場內', { time:'晚餐', transitMode:'car', transitDuration:'' }),
-      mk('航班','', { airportFrom:'UKB', airportTo:'TPE', depTime:'19:00', arrTime:'21:15', duration:'約3小時', flightNo:'', note:'17:00 神戶機場報到 Check-in', transitMode:'car', transitDuration:'' }),
+    { date:'2026-11-14', city:'大阪', summary:'黑門市場 → 神戶機場 → 台北', lat:34.6655, lon:135.5065, items:[
+      mk('購物','黑門市場・藥妝免稅店', { time:'10:00', note:'10:00 退房出門並寄放行李；逛藥妝免稅店等等的', transitMode:'transit', transitDuration:'' }),
+      mk('美食','機場內自理', { time:'晚餐', transitMode:'car', transitDuration:'' }),
+      mk('航班','', { airportFrom:'UKB', airportTo:'TPE', depTime:'19:00', arrTime:'21:15', duration:'約3小時', flightNo:'', note:'17:00 神戶機場報到', transitMode:'car', transitDuration:'' }),
     ]},
   ];
 }
 
 const LODGINGS = [
-  { id:'osaka', name:'大阪 Airbnb（福島）', address:'大阪府大阪市福島區福島5丁目9-11', dates:'11/06 - 11/10（4晚）', phone:'' },
+  { id:'osaka', name:'大阪 Airbnb（福島）', address:'大阪府大阪市福島區福島5丁目9-11', dates:'11/06 - 11/11（5晚）', phone:'' },
   { id:'kyoto', name:'京都 Airbnb（東九條）', address:'京都府京都市南區東九條室町32-2', dates:'11/11 - 11/13（2晚）', phone:'' },
+  { id:'osaka2', name:'大阪住宿（梅田／難波，待找）', address:'', dates:'11/13 - 11/14（1晚）', phone:'' },
 ];
 const FLIGHTS = [
   { id:'go', label:'去程', theme:'blue', codeFrom:'TPE', cityFrom:'台北', codeTo:'UKB', cityTo:'神戶', depTime:'14:30', arrTime:'18:00', date:'11/6', flightNo:'待補' },
