@@ -1,0 +1,17 @@
+{
+  "name": "關西自由行 Kansai Trip",
+  "short_name": "關西行程",
+  "description": "2026.11.06-11.14 大阪・京都・奈良 行程、分帳、購物清單",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f9ff",
+  "theme_color": "#cae9fb",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
