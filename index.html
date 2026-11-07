@@ -497,11 +497,12 @@
               <div>
                 <p class="text-sm font-bold">{{ e.name || '（未命名）' }}</p>
                 <p class="text-[11px] text-[#8a97a3]">{{ e.paidBy ? e.paidBy+' 付' : '未指定付款人' }} ・ {{ e.payment }}</p>
-                <p v-if="e.splitAmong && e.splitAmong.length" class="text-[11px] text-[#8a97a3]">均分：{{ e.splitAmong.join('、') }}</p>
+                <p v-if="splitSummary(e)" class="text-[11px] text-[#8a97a3]">{{ splitSummary(e) }}</p>
                 <p v-if="e.createdBy" class="text-[11px] text-[#c3ccd4]">發起人：{{ e.createdByName || e.createdBy }}</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <span v-if="e.receipts && e.receipts.length" class="text-xs" title="有附明細">📎</span>
               <p class="font-black text-sm">{{ formatMoney(e.amount) }}</p>
               <button v-if="canEditExpense(e)" class="text-[#c3ccd4] text-xs" @click.stop="removeExpense(e.id)">✕</button>
               <span v-else class="text-[#c3ccd4] text-xs">🔒</span>
@@ -845,21 +846,69 @@
                 @click="expenseForm.paidBy=m">{{ m }}</button>
       </div>
 
-      <label class="field-label">由誰分攤（可複選，預設全部）</label>
-      <div class="flex flex-wrap gap-2 mb-3">
-        <button v-for="m in members" :key="m" class="px-3 py-1.5 rounded-xl border text-sm"
-                :class="expenseForm.splitAmong.includes(m) ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
-                @click="toggleSplitMember(m)">{{ m }}</button>
+      <label class="field-label">分攤方式</label>
+      <div class="flex gap-2 mb-3">
+        <button class="flex-1 py-2 rounded-xl border text-sm"
+                :class="expenseForm.splitMode!=='custom' ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                @click="expenseForm.splitMode='equal'">平均分攤</button>
+        <button class="flex-1 py-2 rounded-xl border text-sm"
+                :class="expenseForm.splitMode==='custom' ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                @click="expenseForm.splitMode='custom'">各自金額</button>
       </div>
-      <p v-if="expenseForm.amount && expenseForm.splitAmong.length" class="text-[11px] text-[#8a97a3] mb-3">
-        每人分攤 ¥{{ Math.round(expenseForm.amount / expenseForm.splitAmong.length).toLocaleString() }}
-      </p>
+
+      <template v-if="expenseForm.splitMode!=='custom'">
+        <label class="field-label">由誰分攤（可複選，預設全部）</label>
+        <div class="flex flex-wrap gap-2 mb-3">
+          <button v-for="m in members" :key="m" class="px-3 py-1.5 rounded-xl border text-sm"
+                  :class="expenseForm.splitAmong.includes(m) ? 'bg-[var(--blue-600)] text-white border-[var(--blue-600)]' : 'border-[#dfe6ec] text-[#5a6b7a]'"
+                  @click="toggleSplitMember(m)">{{ m }}</button>
+        </div>
+        <p v-if="expenseForm.amount && expenseForm.splitAmong.length" class="text-[11px] text-[#8a97a3] mb-3">
+          每人分攤 ¥{{ Math.round(expenseForm.amount / expenseForm.splitAmong.length).toLocaleString() }}
+        </p>
+      </template>
+      <template v-else>
+        <label class="field-label">每個人各花多少（沒有的留空）</label>
+        <div class="space-y-2 mb-2">
+          <div v-for="m in members" :key="m" class="flex items-center gap-2">
+            <span class="w-20 text-sm font-bold truncate" :class="expenseForm.paidBy===m ? 'text-[var(--blue-600)]' : ''">{{ m }}</span>
+            <input type="number" inputmode="decimal" min="0" v-model.number="expenseForm.splitAmounts[m]" class="field-input flex-1 !py-2" placeholder="0">
+          </div>
+        </div>
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-[11px]" :class="customSplitDiff===0 ? 'text-[#2e9e6b]' : 'text-[#d9534f]'">
+            已分配 ¥{{ customSplitTotal.toLocaleString() }} / 總額 ¥{{ (Number(expenseForm.amount)||0).toLocaleString() }}
+            <template v-if="customSplitDiff>0">・還差 ¥{{ customSplitDiff.toLocaleString() }}</template>
+            <template v-else-if="customSplitDiff<0">・超出 ¥{{ (-customSplitDiff).toLocaleString() }}</template>
+            <template v-else>・✓ 金額相符</template>
+          </p>
+          <button v-if="expenseForm.paidBy && customSplitDiff>0" class="text-[11px] font-bold text-[var(--blue-600)] shrink-0 ml-2" @click="fillRestToPayer">剩下的給{{ expenseForm.paidBy }}</button>
+        </div>
+      </template>
 
       <label class="field-label">備註</label>
-      <textarea v-model="expenseForm.note" class="field-input mb-4" rows="2"></textarea>
+      <textarea v-model="expenseForm.note" class="field-input mb-3" rows="2"></textarea>
+
+      <label class="field-label">明細照片（最多 {{ MAX_RECEIPTS }} 張）</label>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <div v-for="(r, i) in expenseForm.receipts" :key="r.slice(-24)+i" class="relative w-20 h-20 rounded-xl overflow-hidden bg-[#eef2f5]">
+          <img v-if="receiptSrc(r)" :src="receiptSrc(r)" class="w-full h-full object-cover cursor-pointer" @click="receiptViewer=receiptSrc(r)">
+          <p v-else class="text-[10px] text-[#9aa7b2] text-center pt-7">載入中…</p>
+          <button class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/55 text-white text-[10px] leading-5" @click="expenseForm.receipts.splice(i,1)">✕</button>
+        </div>
+        <label v-if="expenseForm.receipts.length < MAX_RECEIPTS" class="w-20 h-20 rounded-xl border border-dashed border-[#c3ccd4] flex flex-col items-center justify-center cursor-pointer">
+          <input type="file" accept="image/*" multiple @change="onReceiptPhoto" class="hidden">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#9aa7b2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="7" width="18" height="13" rx="2.5"/>
+            <path d="M8 7l1.1-2.1A1.5 1.5 0 0 1 10.4 4h3.2a1.5 1.5 0 0 1 1.3.9L16 7"/>
+            <circle cx="12" cy="13.3" r="3.4"/>
+          </svg>
+          <p class="text-[10px] text-[#9aa7b2] mt-1">附上明細</p>
+        </label>
+      </div>
       <div class="grid grid-cols-2 gap-3">
         <button class="btn-ghost" @click="showExpenseModal=false">取消</button>
-        <button class="btn-primary" @click="saveExpense">{{ expenseEditingId ? '儲存' : '新增' }}</button>
+        <button class="btn-primary" :disabled="expenseSaving" @click="saveExpense">{{ expenseSaving ? '上傳中…' : (expenseEditingId ? '儲存' : '新增') }}</button>
       </div>
       <button v-if="expenseEditingId" class="btn-danger w-full mt-2" @click="removeExpense(expenseEditingId); showExpenseModal=false">刪除</button>
     </div>
@@ -929,12 +978,29 @@
         <div><p class="field-label">金額（日幣）</p><p class="font-bold">¥{{ (expenseDetailView.amount||0).toLocaleString() }}</p></div>
         <div><p class="field-label">付款方式</p><p class="font-bold">{{ expenseDetailView.payment }}</p></div>
         <div><p class="field-label">誰先付的</p><p class="font-bold">{{ expenseDetailView.paidBy || '未指定' }}</p></div>
-        <div v-if="expenseDetailView.splitAmong && expenseDetailView.splitAmong.length"><p class="field-label">由誰分攤</p><p class="font-bold">{{ expenseDetailView.splitAmong.join('、') }}</p></div>
+        <div v-if="splitSummary(expenseDetailView)"><p class="field-label">由誰分攤</p><p class="font-bold">{{ splitSummary(expenseDetailView) }}</p></div>
         <div v-if="expenseDetailView.note"><p class="field-label">備註</p><p class="font-bold whitespace-pre-line">{{ expenseDetailView.note }}</p></div>
+        <div v-if="expenseDetailView.receipts && expenseDetailView.receipts.length">
+          <p class="field-label">明細照片</p>
+          <div class="flex flex-wrap gap-2">
+            <div v-for="(r, i) in expenseDetailView.receipts" :key="i" class="w-20 h-20 rounded-xl overflow-hidden bg-[#eef2f5]">
+              <img v-if="receiptSrc(r)" :src="receiptSrc(r)" class="w-full h-full object-cover cursor-pointer" @click="receiptViewer=receiptSrc(r)">
+              <p v-else class="text-[10px] text-[#9aa7b2] text-center pt-7">載入中…</p>
+            </div>
+          </div>
+        </div>
       </div>
       <p class="text-xs text-[#8a97a3] text-center mb-3">🔒 只有發起人（{{ expenseDetailView.createdByName || expenseDetailView.createdBy }}）能編輯或刪除這筆花費</p>
       <button class="btn-ghost w-full" @click="expenseDetailView=null">關閉</button>
     </div>
+  </div>
+  </transition>
+
+  <!-- ===== Receipt Fullscreen Viewer ===== -->
+  <transition name="fade">
+  <div v-if="receiptViewer" class="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center" @click="receiptViewer=null">
+    <img :src="receiptViewer" class="max-w-full max-h-full object-contain">
+    <button class="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 text-white text-lg">✕</button>
   </div>
   </transition>
 
@@ -1138,6 +1204,11 @@ let db = null;
 const itemsCol = () => collection(db, 'trips', TRIP_ID, 'itineraryItems');
 const shoppingCol = () => collection(db, 'trips', TRIP_ID, 'shopping');
 const expensesCol = () => collection(db, 'trips', TRIP_ID, 'expenses');
+// receipt photos live in their own docs (one image each) so the expenses list stays light
+// and no single doc gets near Firestore's 1MB limit. expense.receipts = [receiptDocId, ...]
+// (or inline dataURLs in local-only mode / before upload).
+const receiptsCol = () => collection(db, 'trips', TRIP_ID, 'receipts');
+const MAX_RECEIPTS = 3;
 const membersRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'members');
 const memberProfilesRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'memberProfiles');
 const lodgingInfoRef = () => doc(db, 'trips', TRIP_ID, 'meta', 'lodgingInfo');
@@ -1238,8 +1309,13 @@ createApp({
       expenses:[],
       showExpenseModal:false,
       expenseEditingId:null,
-      expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'', paidBy:'', splitAmong:[] },
+      expenseForm:{ category:'飲食', name:'', date:'', amount:null, payment:'現金', note:'', paidBy:'', splitAmong:[], splitMode:'equal', splitAmounts:{}, receipts:[] },
       expenseDetailView:null,
+      expenseOrigReceipts:[],
+      expenseSaving:false,
+      receiptCache:{},
+      receiptViewer:null,
+      MAX_RECEIPTS,
 
       myIdentity:'',
       myIdentityKey:'',
@@ -1348,15 +1424,26 @@ createApp({
       });
       return groups;
     },
+    customSplitTotal(){
+      const t = Object.values(this.expenseForm.splitAmounts || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+      return Math.round(t * 100) / 100;
+    },
+    customSplitDiff(){
+      return Math.round(((Number(this.expenseForm.amount) || 0) - this.customSplitTotal) * 100) / 100;
+    },
     balances(){
       const bal = {};
       this.members.forEach(m => { bal[m] = 0; });
       this.expenses.forEach(e => {
         const amt = Number(e.amount) || 0;
         if (!amt) return;
-        const among = (e.splitAmong && e.splitAmong.length) ? e.splitAmong : this.members;
-        const share = amt / among.length;
-        among.forEach(m => { bal[m] = (bal[m] ?? 0) - share; });
+        if (e.splitMode === 'custom' && e.splitAmounts){
+          Object.entries(e.splitAmounts).forEach(([m, v]) => { bal[m] = (bal[m] ?? 0) - (Number(v) || 0); });
+        } else {
+          const among = (e.splitAmong && e.splitAmong.length) ? e.splitAmong : this.members;
+          const share = amt / among.length;
+          among.forEach(m => { bal[m] = (bal[m] ?? 0) - share; });
+        }
         if (e.paidBy) bal[e.paidBy] = (bal[e.paidBy] ?? 0) + amt;
       });
       return bal;
@@ -1795,12 +1882,15 @@ createApp({
     openAddExpense(){
       const today = localDateStr();
       this.expenseEditingId = null;
-      this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'', paidBy: this.members[0] || '', splitAmong: [...this.members] };
+      this.expenseForm = { category:'飲食', name:'', date:today, amount:null, payment:'現金', note:'', paidBy: this.members[0] || '', splitAmong: [...this.members], splitMode:'equal', splitAmounts:{}, receipts: [] };
+      this.expenseOrigReceipts = [];
       this.showExpenseModal = true;
     },
     openEditExpense(e){
       this.expenseEditingId = e.id;
-      this.expenseForm = { category:e.category, name:e.name, date:e.date, amount:e.amount, payment:e.payment, note:e.note||'', paidBy:e.paidBy||'', splitAmong: e.splitAmong ? [...e.splitAmong] : [...this.members] };
+      this.expenseForm = { category:e.category, name:e.name, date:e.date, amount:e.amount, payment:e.payment, note:e.note||'', paidBy:e.paidBy||'', splitAmong: e.splitAmong ? [...e.splitAmong] : [...this.members], splitMode: e.splitMode==='custom' ? 'custom' : 'equal', splitAmounts: { ...(e.splitAmounts||{}) }, receipts: [...(e.receipts||[])] };
+      this.expenseOrigReceipts = [...(e.receipts||[])];
+      this.loadReceipts(e.receipts);
       this.showExpenseModal = true;
     },
     canEditExpense(e){
@@ -1811,7 +1901,7 @@ createApp({
     },
     onExpenseClick(e){
       if (this.canEditExpense(e)) this.openEditExpense(e);
-      else this.expenseDetailView = e;
+      else { this.expenseDetailView = e; this.loadReceipts(e.receipts); }
     },
     onIdentityBadgeClick(){
       // once an identity is already picked, jumping straight back into the full "你是誰？"
@@ -1963,6 +2053,19 @@ createApp({
         console.error(e);
         this.showToast('⚠ 無法開啟 LINE 登入：' + (e && e.message ? e.message : String(e)), 6000);
       }
+    },
+    splitSummary(e){
+      if (e.splitMode === 'custom' && e.splitAmounts){
+        return Object.entries(e.splitAmounts).filter(([, v]) => Number(v) > 0)
+          .map(([m, v]) => `${m} ¥${Number(v).toLocaleString()}`).join('・');
+      }
+      return (e.splitAmong && e.splitAmong.length) ? '均分：' + e.splitAmong.join('、') : '';
+    },
+    fillRestToPayer(){
+      const p = this.expenseForm.paidBy;
+      if (!p || this.customSplitDiff <= 0) return;
+      const cur = Number(this.expenseForm.splitAmounts[p]) || 0;
+      this.expenseForm.splitAmounts[p] = Math.round((cur + this.customSplitDiff) * 100) / 100;
     },
     toggleSplitMember(name){
       const i = this.expenseForm.splitAmong.indexOf(name);
@@ -2133,7 +2236,75 @@ createApp({
         this.members = list;
       }
     },
+    receiptSrc(r){
+      return r && r.startsWith('data:') ? r : (this.receiptCache[r] || '');
+    },
+    async loadReceipts(list){
+      if (!this.cloudEnabled || !list) return;
+      await Promise.all(list.filter(r => r && !r.startsWith('data:') && !this.receiptCache[r]).map(async id => {
+        try{
+          const snap = await getDoc(doc(receiptsCol(), id));
+          if (snap.exists()) this.receiptCache[id] = snap.data().data;
+        }catch(e){ console.error(e); }
+      }));
+    },
+    async onReceiptPhoto(ev){
+      const files = [...(ev.target.files || [])];
+      ev.target.value = '';
+      const room = MAX_RECEIPTS - this.expenseForm.receipts.length;
+      if (files.length > room) this.showToast(`最多只能附 ${MAX_RECEIPTS} 張明細`);
+      for (const f of files.slice(0, Math.max(room, 0))){
+        const raw = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+        // receipts need legible small print, so a bit larger/sharper than shopping photos
+        this.expenseForm.receipts.push(await compressImage(raw, 1280, 0.72));
+      }
+    },
+    // upload pending dataURL receipts to their own docs, delete ones removed while editing,
+    // and return the final list of receipt doc ids
+    async syncReceipts(list, orig){
+      if (!this.cloudEnabled) return list;
+      const out = [];
+      for (const r of list){
+        if (r.startsWith('data:')){
+          const ref = doc(receiptsCol());
+          await setDoc(ref, { data: r, createdBy: this.myIdentityKey, createdAt: serverTimestamp() });
+          this.receiptCache[ref.id] = r;
+          out.push(ref.id);
+        } else out.push(r);
+      }
+      const removed = (orig || []).filter(r => !r.startsWith('data:') && !out.includes(r));
+      await Promise.all(removed.map(id => deleteDoc(doc(receiptsCol(), id)).catch(e => console.error(e))));
+      return out;
+    },
     async saveExpense(){
+      if (this.expenseSaving) return;
+      if (this.expenseForm.splitMode === 'custom'){
+        if (this.customSplitDiff !== 0){
+          this.showToast(this.customSplitDiff > 0
+            ? `⚠ 各自金額還差 ¥${this.customSplitDiff.toLocaleString()}，請分配完再儲存`
+            : `⚠ 各自金額超出總額 ¥${(-this.customSplitDiff).toLocaleString()}`, 5000);
+          return;
+        }
+        // keep only people who actually owe something; splitAmong mirrors them so older
+        // code paths / displays that only know splitAmong still show the right names
+        const amounts = {};
+        Object.entries(this.expenseForm.splitAmounts || {}).forEach(([m, v]) => { if (Number(v) > 0) amounts[m] = Number(v); });
+        this.expenseForm.splitAmounts = amounts;
+        this.expenseForm.splitAmong = Object.keys(amounts);
+      } else {
+        this.expenseForm.splitMode = 'equal';
+        this.expenseForm.splitAmounts = {};
+      }
+      this.expenseSaving = true;
+      try{
+        this.expenseForm.receipts = await this.syncReceipts(this.expenseForm.receipts || [], this.expenseOrigReceipts);
+      }catch(e){
+        console.error(e);
+        this.expenseSaving = false;
+        this.showToast('⚠ 明細照片上傳失敗，請檢查網路後再試', 5000);
+        return;
+      }
+      this.expenseSaving = false;
       if (this.expenseEditingId){
         const data = cleanData(this.expenseForm);
         if (this.cloudEnabled){
@@ -2151,7 +2322,10 @@ createApp({
     },
     async removeExpense(id){
       if (this.cloudEnabled){
+        const ex = this.expenses.find(x => x.id === id);
+        const receiptIds = ((ex && ex.receipts) || []).filter(r => !r.startsWith('data:'));
         try{ await deleteDoc(doc(expensesCol(), id)); }catch(e){ console.error(e); }
+        await Promise.all(receiptIds.map(rid => deleteDoc(doc(receiptsCol(), rid)).catch(e => console.error(e))));
       } else {
         this.expenses = this.expenses.filter(e=>e.id!==id);
       }
